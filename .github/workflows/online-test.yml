@@ -1,0 +1,24 @@
+name: online test
+on:
+  workflow_dispatch:
+  push:
+    paths: ['index.html', 'tests/**', '.github/workflows/online-test.yml']
+permissions:
+  contents: write
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: npm i --no-save playwright@1.48.2 && npx playwright install --with-deps chromium
+      - run: (python3 -m http.server 8080 >/dev/null 2>&1 &) && sleep 2 && node tests/online.js > result.json 2> err.txt; echo "exit $?" >> err.txt; cat result.json; cat err.txt
+      - name: save results to the test-results branch
+        if: always()
+        run: |
+          mkdir out && cp result.json err.txt out/ 2>/dev/null; cd out
+          git init -q && git checkout -q -b test-results && git add -A
+          git -c user.name=ci -c user.email=ci@example.com commit -qm "results ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" test-results
