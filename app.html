@@ -11167,8 +11167,23 @@ function accBtn(t, cls) { const b = el('button', 'mk-btn ' + (cls || 'mk-save') 
 // The page never reloads: the submit is caught and the sign-in runs in the background.
 function accForm(box, go, work) {
   const f = el('form', 'ac-form'); f.method = 'post'; f.action = '#'; f.autocomplete = 'on'; f.noValidate = true;
-  go.type = 'submit'; f.addEventListener('submit', e => { e.preventDefault(); work(); });
+  go.type = 'submit'; f.target = 'fb-pw-sink';
+  f.addEventListener('submit', e => { if (f._real) { f._real = false; return; } e.preventDefault(); work(); });
   box.appendChild(f); return f;
+}
+// Safari only offers "Save password?" when a form is really sent, so after the sign-in works the form is sent for real
+// into a hidden frame. On the website the offline helper (sw.js) answers it on the device; otherwise it goes to about:blank.
+// Either way the password isn't sent to any server. (Not in the iPhone app: apps can't offer to save without Apple's paid linking.)
+async function accSaveLogin(f) {
+  try {
+    if (!f || !f.isConnected || !/^https?:$/.test(location.protocol)) return;
+    if (!document.querySelector('iframe[name="fb-pw-sink"]')) { const fr = el('iframe'); fr.name = 'fb-pw-sink'; fr.title = ''; fr.tabIndex = -1; fr.setAttribute('aria-hidden', 'true'); fr.style.cssText = 'position:absolute;width:0;height:0;border:0;visibility:hidden'; document.body.appendChild(fr); }
+    f.action = navigator.serviceWorker && navigator.serviceWorker.controller ? 'pw-saved.html' : 'about:blank';
+    f._real = true;
+    if (f.requestSubmit) f.requestSubmit(); else f.submit();
+    f._real = false;
+    await new Promise(r => setTimeout(r, 400));   // keep the form on screen a moment while Safari picks it up
+  } catch (e) {}
 }
 function accName(i, name) { i.name = name; i.id = 'fb-' + name; return i; }
 function accWork(btn, msg, label, fn) {   // run fn with the button showing "..." and errors in msg
@@ -11222,7 +11237,7 @@ function buildAccountPage(page) {
   if (accTab === 'in') {
     const un = accInput('Username or email', 'text', 80), pw = accInput('Password', 'password', 72), msg = accMsg(), go = accBtn('Sign in'), fg = accBtn('Forgot password?', 'ac-plain');
     pw.autocomplete = 'current-password'; un.autocomplete = 'username'; accName(un, 'username'); accName(pw, 'password');
-    accForm(box, go, accWork(go, msg, 'Signing in...', async () => {
+    const f = accForm(box, go, accWork(go, msg, 'Signing in...', async () => {
       const u = un.value.trim(); if (!u || !pw.value) throw new Error('Type your username and password');
       let email = u;
       if (!u.includes('@')) {
@@ -11233,10 +11248,11 @@ function buildAccountPage(page) {
         email = u.toLowerCase() + ACC_MAIL;
       }
       const r = await c.auth.signInWithPassword({ email, password: pw.value }); if (r.error) throw r.error;
+      await accSaveLogin(f);
       await accSession('SIGNED_IN', r.data.session);
       playSound('point');
       if (ACCT.needCode) showPage('account'); else accGo('profile', ACCT.user.id, true);
-    })).append(un, pw, msg, go, fg);
+    })); f.append(un, pw, msg, go, fg);
     fg.addEventListener('click', () => { accTab = 'forgot'; playSound('swoosh'); showPage('account'); });
     return;
   }
@@ -11247,7 +11263,7 @@ function buildAccountPage(page) {
   em.addEventListener('input', () => { const has = em.value.includes('@'); em.autocomplete = has ? 'username' : 'email'; un.autocomplete = has ? 'nickname' : 'username'; });
   const msg = accMsg(), go = accBtn('Create account');
   un.addEventListener('input', () => { const v = un.value.replace(/[^A-Za-z0-9_]/g, ''); if (v !== un.value) un.value = v; });
-  accForm(box, go, accWork(go, msg, 'Creating...', async () => {
+  const f = accForm(box, go, accWork(go, msg, 'Creating...', async () => {
     const u = un.value.trim(), e = em.value.trim();
     if (!/^[A-Za-z0-9_]{3,14}$/.test(u)) throw new Error('Usernames are 3-14 letters, numbers or _');
     if (pw.value.length < 8) throw new Error('Pick a longer password (8+ letters)');
@@ -11256,11 +11272,12 @@ function buildAccountPage(page) {
     if (taken && taken.length) throw new Error('That username is taken');
     const r = await c.auth.signUp({ email: e || u.toLowerCase() + ACC_MAIL, password: pw.value, options: { data: { username: u, email_login: !!e }, emailRedirectTo: SITE } });
     if (r.error) throw r.error;
+    await accSaveLogin(f);
     if (!r.data.session) { msg.classList.add('ok'); msg.textContent = 'Almost done! Open the link we emailed you, then sign in.'; accTab = 'in'; return; }
     await accSession('SIGNED_IN', r.data.session);
     playSound('point'); haptic();
     accGo('profile', ACCT.user.id, true);
-  })).append(un, pw, em, el('div', 'pk-note ac-why', 'Your username shows on the leaderboard. The email is optional: with one you can reset a forgotten password.'), msg, go);
+  })); f.append(un, pw, em, el('div', 'pk-note ac-why', 'Your username shows on the leaderboard. The email is optional: with one you can reset a forgotten password.'), msg, go);
 }
 // ---- page: a player's profile (yours has the account settings under it) ----
 function accTime(s) { s = s | 0; const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? h + 'h ' + m + 'm' : m ? m + 'm' : s + 's'; }
@@ -11399,12 +11416,13 @@ function buildNewPassPage(page) {
   // (a hidden username so the password manager updates the right saved login)
   const who = accName(accInput('Username', 'text', 80), 'username'); who.autocomplete = 'username'; who.style.display = 'none';
   who.value = ACCT.profile ? (ACCT.profile.email_login && ACCT.user.email ? ACCT.user.email : ACCT.profile.username) : '';
-  accForm(box, go, accWork(go, msg, 'Saving...', async () => {
+  const f = accForm(box, go, accWork(go, msg, 'Saving...', async () => {
     if (a.value.length < 8) throw new Error('Pick a longer password (8+ letters)');
     if (a.value !== b.value) throw new Error("The two passwords don't match");
     const r = await c.auth.updateUser({ password: a.value }); if (r.error) throw r.error;
+    await accSaveLogin(f);
     ACCT.recovering = false; playSound('point'); toast('Password saved'); accGo('profile', ACCT.user.id, true);
-  })).append(who, a, b, msg, go);
+  })); f.append(who, a, b, msg, go);
 }
 // ---- hook the pages into the menu, plus an Account row at the top of Settings ----
 {
@@ -12247,7 +12265,7 @@ try { layout(); } catch (e) {}
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 145;
+const APP_BUILD = 146;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
