@@ -1,0 +1,128 @@
+{
+ "ok": {
+  "createAccount": true,
+  "nameTaken": true,
+  "leaderboard": true,
+  "stats": true,
+  "anonRefused": true,
+  "raceLink": true,
+  "savedProgress": true,
+  "twoFaOn": true,
+  "qrShows": true,
+  "codeAsked": true,
+  "blockedBeforeCode": true,
+  "codeSignIn": true,
+  "staysSignedIn": true,
+  "liveDuel": true,
+  "friendRequest": true,
+  "onlineDot": true,
+  "liveInvite": true,
+  "raceToFriend": true,
+  "duelHistory": true,
+  "pictureOnBoard": true,
+  "tvSignIn": true,
+  "profilePage": true,
+  "deleteAccount": true
+ },
+ "info": {
+  "create": {
+   "kind": "profile",
+   "signed": true,
+   "name": "ci_yzpe4",
+   "email": "ci_yzpe4@players.flappybird.app"
+  },
+  "taken": 1,
+  "play": {
+   "score": 5,
+   "onBoard": "ci_yzpe4 5",
+   "games": 1,
+   "pipes": 5,
+   "bird": "zen"
+  },
+  "anon": "Sign in first",
+  "link": {
+   "name": "ci_yzpe4",
+   "same": true
+  },
+  "saveRow": [
+   "fb_ghost",
+   "fb_favBirds",
+   "fb_bestScore",
+   "fb_playSounds",
+   "fb_adaptiveBackground"
+  ],
+  "restored": {
+   "best": 5,
+   "ghost": true,
+   "fav": true,
+   "signed": true
+  },
+  "qr": {
+   "loaded": true,
+   "w": 219
+  },
+  "tfa": "2FA is on",
+  "needCode": {
+   "need": true,
+   "signed": false
+  },
+  "aal1Post": 403,
+  "afterCode": {
+   "signed": true,
+   "kind": "profile"
+  },
+  "live": {
+   "A": "ci2_yzpe4",
+   "B": "ci_yzpe4"
+  },
+  "fr": {
+   "add": "sent",
+   "badge": 1,
+   "accept": "friends",
+   "friends": true,
+   "online": true,
+   "invite": "ci_yzpe4wants to duel you live!JoinNot now",
+   "race": "8CJ3X9TjgL",
+   "inbox": [
+    "ci_yzpe4 5"
+   ],
+   "matches": [
+    "live ci2_yzpe4 7:4 ci_yzpe4",
+    "race ci2_yzpe4 0:5 ci_yzpe4"
+   ],
+   "avatar": {
+    "avatar": "robin",
+    "avatar_bg": "pink"
+   }
+  },
+  "tv": {
+   "code": "MZSV9JZ8",
+   "start": 204,
+   "before": {
+    "status": 200,
+    "body": {
+     "waiting": true
+    }
+   },
+   "approve": true,
+   "wrong": 404,
+   "claim": 200,
+   "username": "ci_yzpe4",
+   "again": 409,
+   "session": {
+    "status": 200,
+    "user": "bbe45f1e-07cd-45b8-b4bb-d5b250daaa44",
+    "hasRefresh": true
+   }
+  },
+  "profile": {
+   "name": "ci_yzpe4",
+   "bests": "Normal5",
+   "stats": "1Games5Pipes0Flaps1sTime"
+  },
+  "delA": "deleted",
+  "delB": "deleted"
+ },
+ "errors": [],
+ "pass": true
+}
