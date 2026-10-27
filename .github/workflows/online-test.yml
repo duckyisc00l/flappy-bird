@@ -1,8 +1,6 @@
 name: online test
 on:
   workflow_dispatch:
-  push:
-    paths: ['index.html', 'tests/**', '.github/workflows/online-test.yml']
 permissions:
   contents: write
 jobs:
