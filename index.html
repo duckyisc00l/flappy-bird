@@ -10190,18 +10190,8 @@ function buildLivePage(page) {   // opened from a live link
   box.appendChild(go);
   page.appendChild(box);
 }
-// ---- pages: Leaderboard (from Settings), Challenge and Live (from links) ----
+// ---- pages: Leaderboard (from the Game Over trophy button), Challenge and Live (from links) ----
 {
-  const _bs = buildSettingsPage;
-  buildSettingsPage = function (page) {
-    _bs(page);
-    const list = page.querySelector('.st-list'); if (!list) return;
-    const b = el('button', 'st-row'), t = el('div', 'st-rt');
-    t.append(el('div', 'st-rn', 'Leaderboard'), el('div', 'st-rs', 'The best players in every mode'));
-    b.append(t, el('span', 'st-tval', lbSent[gameMode] ? 'Best ' + lbSent[gameMode] : ''), el('span', 'st-arrow', '›'));
-    b.addEventListener('click', () => { playSound('swoosh'); haptic(); lbMode = gameMode; showPage('leaders'); });
-    list.insertBefore(b, list.firstChild);
-  };
   const PAGES = { leaders: ['Leaderboard', buildLeaderboard], challenge: ['Race!', buildChallengePage], live: ['Live Duel', buildLivePage] };
   const _sp = showPage;
   showPage = function (kind, first) {
