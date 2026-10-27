@@ -108,6 +108,32 @@ function totp(secret, t) {   // the 6-digit code an authenticator app would show
     out.ok.raceToFriend = out.info.fr.inbox.length === 1;
     out.ok.duelHistory = out.info.fr.matches.length === 2 && out.info.fr.matches.some(m => /^race .* 0:5 /.test(m) || /^race .* 0:\d+ /.test(m));
     out.ok.pictureOnBoard = !!(out.info.fr.avatar && out.info.fr.avatar.avatar === 'robin');
+    // 12) sign in on Apple TV with your phone: B plays the TV (no login), A's phone approves, the TV gets A's account
+    out.info.tv = await B.evaluate(async (a) => {
+      const H = { apikey: SB_KEY, 'Content-Type': 'application/json' };
+      const A2 = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; let code = ''; for (let i = 0; i < 8; i++) code += A2[Math.floor(Math.random() * A2.length)];
+      const secret = Array.from(crypto.getRandomValues(new Uint8Array(32))).map(x => x.toString(16).padStart(2, '0')).join('');
+      const hash = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(secret)))).map(x => x.toString(16).padStart(2, '0')).join('');
+      const post = (path, body) => fetch(SB_URL + path, { method: 'POST', headers: H, body: JSON.stringify(body) }).then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));
+      const start = await post('/rest/v1/rpc/tv_link_start', { code, secret_hash: hash });
+      const before = await post('/functions/v1/tv-link', { code, secret });
+      return { code, secret, start: start.status, before };
+    }, {});
+    out.info.tv.approve = await A.evaluate(async (code) => { try { return await sb('rpc/tv_link_approve', { method: 'POST', body: JSON.stringify({ code }) }); } catch (e) { return e.message; } }, out.info.tv.code);
+    Object.assign(out.info.tv, await B.evaluate(async (t) => {
+      const H = { apikey: SB_KEY, 'Content-Type': 'application/json' };
+      const post = (path, body) => fetch(SB_URL + path, { method: 'POST', headers: H, body: JSON.stringify(body) }).then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));
+      const wrong = await post('/functions/v1/tv-link', { code: t.code, secret: t.secret.replace(/./, 'f') + '0' });
+      const claim = await post('/functions/v1/tv-link', { code: t.code, secret: t.secret });
+      const again = await post('/functions/v1/tv-link', { code: t.code, secret: t.secret });
+      let session = null;
+      if (claim.body && claim.body.token_hash) { const v = await post('/auth/v1/verify', { type: 'magiclink', token_hash: claim.body.token_hash }); session = { status: v.status, user: v.body && v.body.user && v.body.user.id, hasRefresh: !!(v.body && v.body.refresh_token) }; }
+      return { wrong: wrong.status, claim: claim.status, username: claim.body && claim.body.username, again: again.status, session };
+    }, out.info.tv));
+    const idA2 = await A.evaluate(() => ACCT.user.id);
+    out.ok.tvSignIn = out.info.tv.start < 300 && out.info.tv.before.body && out.info.tv.before.body.waiting === true && out.info.tv.approve === true &&
+      out.info.tv.wrong === 404 && out.info.tv.claim === 200 && out.info.tv.again === 409 && out.info.tv.session && out.info.tv.session.user === idA2;
+    delete out.info.tv.secret;
     // 10) a profile anyone can open
     out.info.profile = await B.evaluate(async (id) => { accGo('profile', id); await new Promise(r => setTimeout(r, 3000)); return { name: document.querySelector('.ac-name').textContent, bests: document.querySelector('.ac-best').textContent, stats: document.querySelector('.ac-stats').textContent }; }, await A.evaluate(() => ACCT.user.id));
     out.ok.profilePage = out.info.profile.name === U1;

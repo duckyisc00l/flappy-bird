@@ -6128,7 +6128,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '5.2'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '5.3'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12022,6 +12022,57 @@ document.addEventListener('visibilitychange', () => { if (document.hidden && acc
   };
 }
 
+// ===================== v143: approve an Apple TV sign-in from your phone =====================
+// The TV shows a QR code for SITE#tv=CODE. Here you see "Sign in the Apple TV as <you>?" and tap Approve
+// (the database function tv_link_approve). The TV then gets its own login from the tv-link Edge Function.
+let tvCode = null;
+function tvFromHash() {
+  const m = (location.hash || '').match(/[#&]tv=([A-Za-z0-9]{8})/);
+  if (!m) return;
+  try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  tvCode = m[1].toUpperCase();
+  const go = () => { if (PK) showPage('tvapprove'); else openSheet('tvapprove'); };
+  if (typeof SKINS_READY !== 'undefined' && SKINS_READY) setTimeout(go, 300); else setTimeout(go, 1500);
+}
+window.addEventListener('hashchange', tvFromHash);
+setTimeout(tvFromHash, 700);
+// after signing in from that page, come back to it
+{ const _ps = palsSignedIn; palsSignedIn = function () { _ps(); if (tvCode && PK && PK.kind === 'profile') setTimeout(() => { if (PK && tvCode) showPage('tvapprove'); }, 400); }; }
+{
+  const _sp = showPage;
+  showPage = function (kind, first) {
+    if (kind !== 'tvapprove') return _sp(kind, first);
+    _sp('weather', first);
+    PK.kind = kind; PK.root.className = 'pk-root pk-tvapprove' + (first ? '' : ' pk-in');
+    const page = PK.panel.querySelector('.pk-page');
+    page.querySelector('.pk-title').textContent = 'Apple TV';
+    while (page.children.length > 1) page.removeChild(page.lastChild);
+    clearPageTimers();
+    const box = el('div', 'fg-page ac-page tv-page'); page.appendChild(box);
+    if (!tvCode) { box.appendChild(el('div', 'pk-note', 'Scan the QR code on your Apple TV to sign it in.')); return; }
+    if (!accSignedIn()) {
+      box.append(el('div', 'lb-ch-t', 'Sign in first'), el('div', 'lb-ch-s', 'Sign in on this phone, then you can sign in the Apple TV with the same account.'));
+      const b = accBtn(ACCT.needCode ? 'Enter your 2FA code' : 'Sign in'); b.addEventListener('click', () => { playSound('swoosh'); accGo('account'); });
+      box.appendChild(b);
+      return;
+    }
+    const P = ACCT.profile;
+    const cv = avatarCanvas(P.avatar, P.avatar_bg, 'lb-big ac-bird'); box.appendChild(cv);
+    box.append(el('div', 'lb-ch-t', 'Sign in the Apple TV?'), el('div', 'lb-ch-s', 'As ' + P.username + '. The TV shows code ' + tvCode + ' - check it matches.'));
+    const msg = accMsg(), yes = accBtn('Approve'), no = accBtn('Cancel', 'ac-plain');
+    box.append(msg, yes, no);
+    no.addEventListener('click', () => { tvCode = null; closePicker(); });
+    yes.addEventListener('click', accWork(yes, msg, 'Approving...', async () => {
+      const ok = await sb('rpc/tv_link_approve', { method: 'POST', body: JSON.stringify({ code: tvCode }) });
+      if (!ok) throw new Error('That code ran out or was already used. Get a new one on the TV');
+      tvCode = null; playSound('point'); haptic();
+      box.textContent = '';
+      box.append(el('div', 'lb-ch-t ac-ok', 'Done!'), el('div', 'lb-ch-s', 'Look at your TV: it signs in as ' + P.username + ' in a moment.'));
+      const c = accBtn('Close'); c.addEventListener('click', () => closePicker()); box.appendChild(c);
+    }));
+  };
+}
+
 // ===================== v140: desktop mode =====================
 // On a wide screen the game fills the whole window (the full 1024-point scene: more pipes ahead). Keyboard everywhere: Space / Up / W flap (and start), Enter plays, Esc closes menus, M sound,
 // S settings, L leaderboard, F friends, P picture of your profile... (see DESK_KEYS).
@@ -12186,7 +12237,7 @@ try { layout(); } catch (e) {}
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 142;
+const APP_BUILD = 143;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
