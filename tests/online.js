@@ -74,6 +74,30 @@ function totp(secret, t) {   // the 6-digit code an authenticator app would show
     await A.waitForTimeout(6000);
     out.info.live = { A: await A.evaluate(() => liveRoom && liveRoom.opp && liveRoom.opp.name), B: await B.evaluate(() => liveRoom && liveRoom.opp && liveRoom.opp.name) };
     out.ok.liveDuel = out.info.live.A === U2 && out.info.live.B === U1;
+    // 11) friends: request, accept, online dot, live invite banner, a race sent to a friend, duel history, pictures
+    const idA = await A.evaluate(() => ACCT.user.id), idB = await B.evaluate(() => ACCT.user.id);
+    out.info.fr = {};
+    out.info.fr.add = await A.evaluate(async (u) => { try { return await sb('rpc/friend_add', { method: 'POST', body: JSON.stringify({ name: u }) }); } catch (e) { return e.message; } }, U2);
+    await B.evaluate(() => palsLoad()); await B.waitForTimeout(1500);
+    out.info.fr.badge = await B.evaluate(() => palsBadge());
+    out.info.fr.accept = await B.evaluate(async (u) => { try { return await sb('rpc/friend_add', { method: 'POST', body: JSON.stringify({ name: u }) }); } catch (e) { return e.message; } }, U1);
+    await A.evaluate(() => palsLoad()); await A.waitForTimeout(4000);
+    out.info.fr.friends = await A.evaluate((id) => palsIsFriend(id), idB);
+    out.info.fr.online = await A.evaluate((id) => isOnline(id), idB);
+    await A.evaluate((id) => rtSend(id, { t: 'live', room: 'ABCDE' }), idB); await B.waitForTimeout(2500);
+    out.info.fr.invite = await B.evaluate(() => { const d = document.querySelector('.fr-inv'); return d ? d.textContent : null; });
+    out.info.fr.race = await A.evaluate(async (id) => { try { const enc = JSON.parse(localStorage.getItem(ghostKey('normal'))); return await uploadRun(enc, 'normal', { to_user: id }); } catch (e) { return 'ERR ' + e.message; } }, idB);
+    await B.evaluate(() => palsLoad()); await B.waitForTimeout(1500);
+    out.info.fr.inbox = await B.evaluate(() => FR.inbox.map(g => g.name + ' ' + g.score));
+    await B.evaluate(async (a) => { await recordMatch('race', a.gid, a.id, 0, 999, 'normal'); await recordMatch('live', 'live-CI-1-' + Date.now() % 1e6, a.id, 7, 4, 'normal'); }, { gid: out.info.fr.race, id: idA });
+    out.info.fr.matches = await A.evaluate(async (id) => (await fetchMatches(id)).map(m => m.kind + ' ' + m.pa.username + ' ' + m.a_score + ':' + m.b_score + ' ' + m.pb.username), idA);
+    out.info.fr.avatar = await A.evaluate(async () => { await sb('profiles?id=eq.' + ACCT.user.id, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ avatar: 'robin', avatar_bg: 'pink' }) }); const rows = await lbFetch('normal', false); const me = rows.find(r => r.user_id === ACCT.user.id); return me && me.profiles; });
+    out.ok.friendRequest = out.info.fr.add === 'sent' && out.info.fr.badge === 1 && out.info.fr.accept === 'friends' && out.info.fr.friends;
+    out.ok.onlineDot = out.info.fr.online;
+    out.ok.liveInvite = !!(out.info.fr.invite && out.info.fr.invite.includes(U1));
+    out.ok.raceToFriend = out.info.fr.inbox.length === 1;
+    out.ok.duelHistory = out.info.fr.matches.length === 2 && out.info.fr.matches.some(m => /^race .* 0:5 /.test(m) || /^race .* 0:\d+ /.test(m));
+    out.ok.pictureOnBoard = !!(out.info.fr.avatar && out.info.fr.avatar.avatar === 'robin');
     // 10) a profile anyone can open
     out.info.profile = await B.evaluate(async (id) => { accGo('profile', id); await new Promise(r => setTimeout(r, 3000)); return { name: document.querySelector('.ac-name').textContent, bests: document.querySelector('.ac-best').textContent, stats: document.querySelector('.ac-stats').textContent }; }, await A.evaluate(() => ACCT.user.id));
     out.ok.profilePage = out.info.profile.name === U1;
