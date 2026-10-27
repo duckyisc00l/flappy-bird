@@ -332,6 +332,7 @@ a.mk-btn.mk-save { color: #fff; }
 .ac-page { gap: 0; }
 .ac-page .lb-toggle { margin-bottom: 10px; }
 .ac-in { font-size: 16px !important; }
+.ac-form { display: contents; }
 .ac-code { text-align: center; letter-spacing: 6px; font-size: 20px !important; }
 .ac-btn { flex: none !important; width: 100%; margin-bottom: 6px; padding: 11px 0 !important; font-size: 9px !important; text-align: center; text-decoration: none; display: block; box-sizing: border-box; }
 .ac-plain { background: transparent !important; border-color: transparent !important; box-shadow: none !important; color: #533846 !important; text-decoration: underline; }
@@ -11161,7 +11162,15 @@ function accGo(kind, id, replace) {
 }
 function accInput(ph, type, max) { const i = el('input', 'pk-search ac-in'); i.placeholder = ph; i.type = type || 'text'; if (max) i.maxLength = max; i.autocomplete = 'off'; i.autocapitalize = 'off'; i.spellcheck = false; return i; }
 function accMsg() { return el('div', 'mk-msg ac-msg'); }
-function accBtn(t, cls) { return el('button', 'mk-btn ' + (cls || 'mk-save') + ' ac-btn', t); }
+function accBtn(t, cls) { const b = el('button', 'mk-btn ' + (cls || 'mk-save') + ' ac-btn', t); b.type = 'button'; return b; }
+// A real <form> so Safari / iCloud Keychain, Chrome and other password managers offer to save the password (and fill it next time).
+// The page never reloads: the submit is caught and the sign-in runs in the background.
+function accForm(box, go, work) {
+  const f = el('form', 'ac-form'); f.method = 'post'; f.action = '#'; f.autocomplete = 'on'; f.noValidate = true;
+  go.type = 'submit'; f.addEventListener('submit', e => { e.preventDefault(); work(); });
+  box.appendChild(f); return f;
+}
+function accName(i, name) { i.name = name; i.id = 'fb-' + name; return i; }
 function accWork(btn, msg, label, fn) {   // run fn with the button showing "..." and errors in msg
   return async () => {
     if (btn.disabled) return;
@@ -11212,9 +11221,8 @@ function buildAccountPage(page) {
   }
   if (accTab === 'in') {
     const un = accInput('Username or email', 'text', 80), pw = accInput('Password', 'password', 72), msg = accMsg(), go = accBtn('Sign in'), fg = accBtn('Forgot password?', 'ac-plain');
-    pw.autocomplete = 'current-password'; un.autocomplete = 'username';
-    box.append(un, pw, msg, go, fg);
-    go.addEventListener('click', accWork(go, msg, 'Signing in...', async () => {
+    pw.autocomplete = 'current-password'; un.autocomplete = 'username'; accName(un, 'username'); accName(pw, 'password');
+    accForm(box, go, accWork(go, msg, 'Signing in...', async () => {
       const u = un.value.trim(); if (!u || !pw.value) throw new Error('Type your username and password');
       let email = u;
       if (!u.includes('@')) {
@@ -11228,18 +11236,18 @@ function buildAccountPage(page) {
       await accSession('SIGNED_IN', r.data.session);
       playSound('point');
       if (ACCT.needCode) showPage('account'); else accGo('profile', ACCT.user.id, true);
-    }));
-    pw.addEventListener('keydown', e => { if (e.key === 'Enter') go.click(); });
+    })).append(un, pw, msg, go, fg);
     fg.addEventListener('click', () => { accTab = 'forgot'; playSound('swoosh'); showPage('account'); });
     return;
   }
   // create an account
   const un = accInput('Username', 'text', 14), pw = accInput('Password (8+ letters)', 'password', 72), em = accInput('Email (optional)', 'email', 80);
-  pw.autocomplete = 'new-password';
+  pw.autocomplete = 'new-password'; un.autocomplete = 'username'; em.autocomplete = 'email'; accName(un, 'username'); accName(pw, 'new-password'); accName(em, 'email');
+  // email accounts sign in with the email, so then that's the "username" the password manager saves
+  em.addEventListener('input', () => { const has = em.value.includes('@'); em.autocomplete = has ? 'username' : 'email'; un.autocomplete = has ? 'nickname' : 'username'; });
   const msg = accMsg(), go = accBtn('Create account');
-  box.append(un, pw, em, el('div', 'pk-note ac-why', 'Your username shows on the leaderboard. The email is optional: with one you can reset a forgotten password.'), msg, go);
   un.addEventListener('input', () => { const v = un.value.replace(/[^A-Za-z0-9_]/g, ''); if (v !== un.value) un.value = v; });
-  go.addEventListener('click', accWork(go, msg, 'Creating...', async () => {
+  accForm(box, go, accWork(go, msg, 'Creating...', async () => {
     const u = un.value.trim(), e = em.value.trim();
     if (!/^[A-Za-z0-9_]{3,14}$/.test(u)) throw new Error('Usernames are 3-14 letters, numbers or _');
     if (pw.value.length < 8) throw new Error('Pick a longer password (8+ letters)');
@@ -11252,7 +11260,7 @@ function buildAccountPage(page) {
     await accSession('SIGNED_IN', r.data.session);
     playSound('point'); haptic();
     accGo('profile', ACCT.user.id, true);
-  }));
+  })).append(un, pw, em, el('div', 'pk-note ac-why', 'Your username shows on the leaderboard. The email is optional: with one you can reset a forgotten password.'), msg, go);
 }
 // ---- page: a player's profile (yours has the account settings under it) ----
 function accTime(s) { s = s | 0; const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60; return h ? h + 'h ' + m + 'm' : m ? m + 'm' : s + 's'; }
@@ -11387,14 +11395,16 @@ function buildNewPassPage(page) {
   const c = authClient();
   box.appendChild(el('div', 'lb-ch-s', ACCT.recovering ? 'Pick a new password for ' + (ACCT.profile ? ACCT.profile.username : 'your account') + '.' : 'Pick a new password.'));
   const a = accInput('New password (8+ letters)', 'password', 72), b = accInput('Type it again', 'password', 72), msg = accMsg(), go = accBtn('Save password');
-  a.autocomplete = b.autocomplete = 'new-password';
-  box.append(a, b, msg, go);
-  go.addEventListener('click', accWork(go, msg, 'Saving...', async () => {
+  a.autocomplete = b.autocomplete = 'new-password'; accName(a, 'new-password'); accName(b, 'confirm-password');
+  // (a hidden username so the password manager updates the right saved login)
+  const who = accName(accInput('Username', 'text', 80), 'username'); who.autocomplete = 'username'; who.style.display = 'none';
+  who.value = ACCT.profile ? (ACCT.profile.email_login && ACCT.user.email ? ACCT.user.email : ACCT.profile.username) : '';
+  accForm(box, go, accWork(go, msg, 'Saving...', async () => {
     if (a.value.length < 8) throw new Error('Pick a longer password (8+ letters)');
     if (a.value !== b.value) throw new Error("The two passwords don't match");
     const r = await c.auth.updateUser({ password: a.value }); if (r.error) throw r.error;
     ACCT.recovering = false; playSound('point'); toast('Password saved'); accGo('profile', ACCT.user.id, true);
-  }));
+  })).append(who, a, b, msg, go);
 }
 // ---- hook the pages into the menu, plus an Account row at the top of Settings ----
 {
@@ -12237,7 +12247,7 @@ try { layout(); } catch (e) {}
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 144;
+const APP_BUILD = 145;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {

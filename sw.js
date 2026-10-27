@@ -1,5 +1,5 @@
 // Offline cache for the Home Screen app. Bump VERSION when you upload a new index.html.
-const VERSION = 'flappy-remix-v144';
+const VERSION = 'flappy-remix-v145';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-180.png', './icon-192.png', './icon-512.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
