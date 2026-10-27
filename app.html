@@ -12507,12 +12507,12 @@ async function pushOn() {
   const k = sub.toJSON().keys || {};
   await sb('push_subs?on_conflict=endpoint', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
     body: JSON.stringify({ endpoint: sub.endpoint, p256dh: k.p256dh, auth: k.auth, user_id: ACCT.user.id }) });
-  saveStr('pushOn', '1');
+  saveStr('pushOn', '1'); saveStr('pushAsk', '');
 }
-async function pushOff() {
+async function pushOff(stick) {   // stick = you turned them off yourself (signing out doesn't count)
   const sub = await pushSub();
   if (sub) { try { await sb('push_subs?endpoint=eq.' + encodeURIComponent(sub.endpoint), { method: 'DELETE' }); } catch (e) {} try { await sub.unsubscribe(); } catch (e) {} }
-  saveStr('pushOn', '0');
+  if (stick !== false) saveStr('pushOn', '0');
 }
 function buildNotifyPage(page) {
   const box = el('div', 'fg-page ac-page'); page.appendChild(box);
@@ -12564,7 +12564,36 @@ function buildNotifyPage(page) {
   };
 }
 // signing out: this browser stops getting the old account's notifications
-{ const _so = accSignOut; accSignOut = async function () { try { await pushOff(); } catch (e) {} return _so.apply(this, arguments); }; }
+{ const _so = accSignOut; accSignOut = async function () { try { await pushOff(false); saveStr('pushUid', ''); } catch (e) {} return _so.apply(this, arguments); }; }
+
+// v148: on by default. Signed in where notifications work:
+//  - already allowed on this device -> turned on by itself (new device, new sign-in), unless you turned them off
+//  - never asked -> a banner asks once ("Turn on" needs your tap: browsers only ask after a tap)
+let pushAsked = false;
+function pushCanAuto() { return pushSupported() && (!pushIsIOS() || pushStandalone()) && accSignedIn() && loadStr('pushOn', '') !== '0'; }
+async function pushAuto() {
+  if (!pushCanAuto()) return;
+  if (Notification.permission === 'granted') { if (!(await pushSub()) || loadStr('pushUid', '') !== ACCT.user.id) { try { await pushOn(); saveStr('pushUid', ACCT.user.id); } catch (e) {} } return; }
+  if (Notification.permission === 'default' && !pushAsked && loadStr('pushAsk', '') !== 'no') { pushAsked = true; setTimeout(pushBanner, 2500); }
+}
+function pushBanner() {
+  if (!pushCanAuto() || Notification.permission !== 'default' || document.querySelector('.up-bar')) return;
+  const d = el('div', 'up-bar'), t = el('div', 'up-t');
+  t.append(el('b', '', 'Turn on notifications?'), el('span', '', "Know when a friend beats your score or sends you a race."));
+  const go = el('button', 'mk-btn mk-save', 'Turn on'), no = el('button', 'mk-btn', 'Not now');
+  d.append(t, go, no);
+  for (const ev of ['pointerdown', 'touchstart']) d.addEventListener(ev, e => e.stopPropagation(), { passive: true });
+  document.body.appendChild(d); setTimeout(() => d.classList.add('in'), 30);
+  const close = () => { d.classList.remove('in'); setTimeout(() => d.remove(), 300); };
+  no.addEventListener('click', () => { playSound('swoosh'); saveStr('pushAsk', 'no'); close(); });
+  go.addEventListener('click', async () => {
+    go.disabled = no.disabled = true; go.textContent = '...';
+    try { await pushOn(); saveStr('pushUid', ACCT.user.id); playSound('point'); toast('Notifications are on'); close(); }
+    catch (e) { saveStr('pushAsk', 'no'); t.lastChild.textContent = e.message; go.textContent = 'OK'; go.disabled = false; go.onclick = close; no.style.display = 'none'; }
+  });
+}
+{ const _ac = accChanged; accChanged = function () { const r = _ac.apply(this, arguments); setTimeout(() => { pushAuto().catch(() => {}); }, 500); return r; }; }
+setTimeout(() => { pushAuto().catch(() => {}); }, 5000);
 
 // ===================== v147: watch the best runs =====================
 // Every signed-in player's best run of each mode is uploaded as a ghost (the bird's path + the course seed).
@@ -12671,7 +12700,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 147;
+const APP_BUILD = 148;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
