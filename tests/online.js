@@ -44,6 +44,16 @@ function totp(secret, t) {   // the 6-digit code an authenticator app would show
     // 5) race link carries the account name
     out.info.link = await A.evaluate(async () => { try { const url = await myBestLink('normal'); const row = await fetchRun(url.split('#r=')[1]); return { name: row.name, same: row.data.seed === loadGhost('normal').seed }; } catch (e) { return { err: e.message }; } });
     out.ok.raceLink = !!(out.info.link.same && out.info.link.name === out.info.create.name);
+    // 5b) saved progress: a fresh phone signing in gets the best score, ghost run and favourites
+    await A.evaluate(() => { favBirds.push('robin'); localStorage.setItem('fb_favBirds', JSON.stringify(favBirds)); }); await A.waitForTimeout(8000);
+    out.info.saveRow = await A.evaluate(async () => { const r = await sb('saves?select=data&user_id=eq.' + ACCT.user.id); return r && r[0] ? Object.keys(r[0].data.keys) : null; });
+    const C = await page('C');
+    await C.evaluate(() => { accTab = 'in'; openSheet('account'); }); await C.waitForTimeout(600);
+    { const i = await C.$$('.ac-in'); await i[0].fill(U1); await i[1].fill(PW); await C.click('.ac-btn.mk-save'); }
+    await C.waitForTimeout(9000);
+    out.info.restored = await C.evaluate(() => ({ best: bestScore(), ghost: !!loadGhost('normal'), fav: favBirds.includes('robin'), signed: accSignedIn() }));
+    out.ok.savedProgress = !!(out.info.saveRow && out.info.restored.best === out.info.play.score && out.info.restored.ghost && out.info.restored.fav);
+    await C.close();
     // 6) turn on 2FA through the screen (the test computes the app's code)
     await A.evaluate(() => accGo('twofa')); await A.waitForTimeout(4000);
     const secret = await A.evaluate(() => (document.querySelector('.ac-key') || {}).textContent || '');
