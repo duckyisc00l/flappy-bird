@@ -750,7 +750,7 @@ let gameMode = loadStr('gameMode', loadBool('hardMode', false) ? 'hard' : 'norma
 if (!MODES.some(m => m.id === gameMode)) gameMode = 'normal';
 function modeSuffix(m) { return m === 'normal' ? '' : m === 'hard' ? 'Hard' : '_' + m; }
 function modeInfo(m) { return MODES.find(x => x.id === (m || gameMode)) || MODES[0]; }
-let ghostOn = (() => { try { const v = localStorage.getItem('fb_ghostOn'); if (v !== null) return v === '1'; const old = localStorage.getItem('fb_ghost'); if (old === '0') { localStorage.removeItem('fb_ghost'); saveBool('ghostOn', false); return false; } if (old === '1') localStorage.removeItem('fb_ghost'); } catch (e) {} return true; })();   // (the switch moved to "fb_ghostOn"; "fb_ghost" is the Normal ghost run)
+let ghostOn = (() => { try { const v = localStorage.getItem('fb_ghostOn'); if (v !== null) return v === '1'; const old = localStorage.getItem('fb_ghost'); if (old === '0') { localStorage.removeItem('fb_ghost'); saveBool('ghostOn', false); return false; } if (old === '1') localStorage.removeItem('fb_ghost'); } catch (e) {} return false; })();   // v144: off until you turn it on   // (the switch moved to "fb_ghostOn"; "fb_ghost" is the Normal ghost run)
 const HARD = { gap: 110, speed: 1.25, every: 1.0 };   // normal: gap 130, 200 pt/s, a pipe every 1 s
 
 // ---------- Constants (GameScene.Constants) ----------
@@ -7619,7 +7619,7 @@ function buildDevPage(page) {
     sure('Settings', () => {
       setGameMode('normal'); weatherPick = 'auto'; seasonPick = 'auto'; birdPick = 'random';
       for (const [k, v] of [['weather', 'auto'], ['season', 'auto'], ['birdPick', 'random']]) saveStr(k, v);
-      playSounds = true; saveBool('playSounds', true); autoplay = false; saveBool('autoplay', false); ghostOn = true; saveBool('ghostOn', true);
+      playSounds = true; saveBool('playSounds', true); autoplay = false; saveBool('autoplay', false); ghostOn = false; saveBool('ghostOn', false);
       updateSettingsUI(); rollWeather(); hauntedMusicSync();
     }),
     sure('Everything', () => { removeKeys(k => k.startsWith('fb_')); setTimeout(() => location.reload(), 400); }),
@@ -12241,7 +12241,7 @@ try { layout(); } catch (e) {}
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 143;
+const APP_BUILD = 144;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
