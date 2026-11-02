@@ -4115,7 +4115,8 @@ function hardOn() { return modeOn('hard'); }
 function turboMul() { return 1 + Math.min(Math.max(score, 0), 50) * 0.016; }   // up to 1.8x at 50 points
 function speedMul() { return hardOn() ? HARD.speed : modeOn('turbo') ? turboMul() : 1; }
 function modeGap() { return hardOn() ? HARD.gap : modeOn('tiny') ? 106 : modeOn('wavy') ? 140 : C.verticalPipeGap; }
-function spawnEvery() { return hardOn() ? HARD.every : modeOn('turbo') ? 1 / Math.sqrt(turboMul()) : 1; }
+const PIPE_EVERY = 2;   // v151: a new pipe every 2 seconds (was 1)
+function spawnEvery() { return PIPE_EVERY * (hardOn() ? HARD.every : modeOn('turbo') ? 1 / Math.sqrt(turboMul()) : 1); }
 function spawnPipe() {
   if (endingWantsControl()) return; // ending add-on takes over spawning from 920
   if (afterlife >= 1 && afterlife !== 1) return; // the -1 run has its own (single) pipe
@@ -12710,7 +12711,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 151;
+const APP_BUILD = 152;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
