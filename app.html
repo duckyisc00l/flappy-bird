@@ -4111,7 +4111,7 @@ function hardOn() { return modeOn('hard'); }
 function turboMul() { return 1 + Math.min(Math.max(score, 0), 50) * 0.016; }   // up to 1.8x at 50 points
 function speedMul() { return hardOn() ? HARD.speed : modeOn('turbo') ? turboMul() : 1; }
 function modeGap() { return hardOn() ? HARD.gap : modeOn('tiny') ? 106 : modeOn('wavy') ? 140 : C.verticalPipeGap; }
-const PIPE_EVERY = 2;   // v151: a new pipe every 2 seconds (was 1)
+const PIPE_EVERY = 1;   // a new pipe every second (v153: back from 2; the wait is at the start now)
 function spawnEvery() { return PIPE_EVERY * (hardOn() ? HARD.every : modeOn('turbo') ? 1 / Math.sqrt(turboMul()) : 1); }
 function spawnPipe() {
   if (endingWantsControl()) return; // ending add-on takes over spawning from 920
@@ -12707,7 +12707,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 152;
+const APP_BUILD = 153;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -12787,11 +12787,17 @@ function applyPipes() {   // swap the pictures every frame: classic during the e
   img.pipe_up = use.up; img.pipe_down = use.down;
 }
 
-// ---------- Auto weather = the weather in Florida right now ----------
-// Open-Meteo (free, no key). Daytona Beach. Refreshed every 10 minutes; if it can't be
-// reached, Auto falls back to the old random weather for the season.
+// ---------- Auto weather = the live weather (where you are, or Daytona Beach) ----------
+// Open-Meteo (free, no key), refreshed every 10 minutes. "Weather from" on the Weather page: Daytona Beach,
+// or My location (the browser asks first; the position is rounded to about 1 km). If nothing can be reached,
+// Auto falls back to the old random weather for the season.
 const FL_PLACE = { name: 'Daytona Beach, FL', lat: 29.2108, lon: -81.0228 };
-let FLWX = (() => { try { const o = JSON.parse(localStorage.getItem('fb_flwx_daytona') || 'null'); return o && o.w ? o : null; } catch (e) { return null; } })();
+let wxFrom = loadStr('wxFrom', 'daytona');   // 'daytona' | 'here'
+let HERE = (() => { try { const o = JSON.parse(localStorage.getItem('fb_wxHere') || 'null'); return o && typeof o.lat === 'number' ? o : null; } catch (e) { return null; } })();
+let FLWX = (() => { try { const o = JSON.parse(localStorage.getItem('fb_wxLive') || 'null'); return o && o.w ? o : null; } catch (e) { return null; } })();
+let hereMsg = '';
+function wxPlace() { return wxFrom === 'here' && HERE ? { name: HERE.name || 'your location', lat: HERE.lat, lon: HERE.lon, here: true } : Object.assign({ here: false }, FL_PLACE); }
+function samePlace(a, b) { return a && b && Math.abs(a.lat - b.lat) < 0.05 && Math.abs(a.lon - b.lon) < 0.05; }
 function wmoToWx(code, wind, gust) {
   if ([95, 96, 99].includes(code)) return 'storm';
   if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
@@ -12807,28 +12813,48 @@ function wmoText(code) {
     95: 'thunderstorm', 96: 'thunderstorm with hail', 99: 'thunderstorm with hail' };
   return T[code] || 'weather';
 }
-function flFresh() { return !!(FLWX && Date.now() - FLWX.t < 3 * 3600 * 1000); }
+function flFresh() { return !!(FLWX && Date.now() - FLWX.t < 3 * 3600 * 1000 && samePlace(FLWX, wxPlace())); }
 let flBusy = false;
 async function fetchFlorida() {
   if (flBusy) return; flBusy = true;
   try {
-    const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + FL_PLACE.lat + '&longitude=' + FL_PLACE.lon +
-      '&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,is_day&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=America%2FNew_York';
+    const pl = wxPlace();
+    const u = 'https://api.open-meteo.com/v1/forecast?latitude=' + pl.lat.toFixed(2) + '&longitude=' + pl.lon.toFixed(2) +
+      '&current=temperature_2m,weather_code,wind_speed_10m,wind_gusts_10m,is_day&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto';
     const r = await fetch(u, { cache: 'no-store' }); if (!r.ok) throw new Error('weather ' + r.status);
     const j = await r.json(), c = j && j.current; if (!c || typeof c.weather_code !== 'number') throw new Error('no weather');
     const wind = +c.wind_speed_10m || 0, gust = +c.wind_gusts_10m || 0;
-    FLWX = { w: wmoToWx(c.weather_code, wind, gust), code: c.weather_code, temp: Math.round(+c.temperature_2m), wind: Math.round(wind), day: c.is_day === 1, t: Date.now() };
-    try { localStorage.setItem('fb_flwx_daytona', JSON.stringify(FLWX)); } catch (e) {}
+    FLWX = { w: wmoToWx(c.weather_code, wind, gust), code: c.weather_code, temp: Math.round(+c.temperature_2m), wind: Math.round(wind), day: c.is_day === 1, t: Date.now(),
+      lat: pl.lat, lon: pl.lon, name: pl.name, here: pl.here };
+    try { localStorage.setItem('fb_wxLive', JSON.stringify(FLWX)); } catch (e) {}
     if (weatherPick === 'auto' && WX.weather !== FLWX.w) { WX.weather = FLWX.w; WX.seeded = false; }
-    if (PK && PK.kind === 'weather') { const n = PK.panel.querySelector('.fl-note'); if (n) n.textContent = floridaLine(); }
+    floridaRedraw();
   } catch (e) {} finally { flBusy = false; }
 }
+function floridaRedraw() { if (PK && PK.kind === 'weather') { const n = PK.panel.querySelector('.fl-note'); if (n) n.textContent = floridaLine(); } }
 function floridaLine() {
-  if (!FLWX) return 'Auto weather follows the live weather in ' + FL_PLACE.name + '. Checking...';
+  if (hereMsg) return hereMsg;
+  const pl = wxPlace();
+  if (!FLWX || !samePlace(FLWX, pl)) return 'Auto weather follows the live weather ' + (pl.here ? 'where you are' : 'in ' + pl.name) + '. Checking...';
   const ago = Math.round((Date.now() - FLWX.t) / 60000);
-  return 'Live in ' + FL_PLACE.name + ': ' + FLWX.temp + 'F, ' + wmoText(FLWX.code) + (FLWX.wind >= 15 ? ', wind ' + FLWX.wind + ' mph' : '') +
+  return 'Live ' + (pl.here ? 'where you are' : 'in ' + pl.name) + ': ' + FLWX.temp + 'F, ' + wmoText(FLWX.code) + (FLWX.wind >= 15 ? ', wind ' + FLWX.wind + ' mph' : '') +
     (ago >= 15 ? ' (' + (ago < 120 ? ago + ' min' : Math.round(ago / 60) + ' h') + ' ago)' : '') + '. Auto weather plays it.';
 }
+// My location: the browser asks the first time; rounded to ~1 km before it's stored or sent anywhere
+function locateMe(ask) {
+  if (!navigator.geolocation) { hereMsg = "This browser can't share your location. Using Daytona Beach."; wxFrom = 'daytona'; saveStr('wxFrom', 'daytona'); floridaRedraw(); return; }
+  if (ask) { hereMsg = 'Finding you...'; floridaRedraw(); }
+  navigator.geolocation.getCurrentPosition((pos) => {
+    const lat = Math.round(pos.coords.latitude * 100) / 100, lon = Math.round(pos.coords.longitude * 100) / 100;
+    HERE = { lat, lon, name: 'your location', t: Date.now() };
+    try { localStorage.setItem('fb_wxHere', JSON.stringify(HERE)); } catch (e) {}
+    hereMsg = ''; floridaRedraw(); fetchFlorida();
+  }, () => {
+    if (ask || !HERE) { wxFrom = 'daytona'; saveStr('wxFrom', 'daytona'); hereMsg = 'No location (not allowed). Using Daytona Beach.'; setTimeout(() => { hereMsg = ''; floridaRedraw(); }, 4000); }
+    floridaRedraw(); markFrom(); fetchFlorida();
+  }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 30 * 60 * 1000 });
+}
+function markFrom() { if (PK && PK.kind === 'weather') PK.panel.querySelectorAll('.wx-from .pk-opt').forEach(e => e.classList.toggle('on', e.dataset.id === wxFrom)); }
 {
   const _rw = rollWeather;
   rollWeather = function () {
@@ -12841,9 +12867,21 @@ function floridaLine() {
   buildWeatherPicker = function (panel) {
     _bw(panel);
     const status = panel.lastChild;
-    const fl = el('div', 'pk-note fl-note', floridaLine());
-    const secs = panel.querySelectorAll('.pk-sec');
-    panel.insertBefore(fl, secs[1] || status);   // right under the Weather choices
+    const secs = panel.querySelectorAll('.pk-sec'), at = secs[1] || status;
+    // Weather from: Daytona Beach / My location
+    const from = el('div', 'pk-opts wx-from');
+    for (const [id, name] of [['daytona', 'Daytona Beach'], ['here', 'My location']]) {
+      const b = el('button', 'pk-opt' + (wxFrom === id ? ' on' : ''), name); b.dataset.id = id;
+      b.addEventListener('click', () => {
+        haptic(); playSound('swoosh');
+        wxFrom = id; saveStr('wxFrom', id); markFrom();
+        if (id === 'here') locateMe(true); else { hereMsg = ''; floridaRedraw(); fetchFlorida(); }
+      });
+      from.appendChild(b);
+    }
+    panel.insertBefore(el('div', 'pk-sec', 'Weather from'), at);
+    panel.insertBefore(from, at);
+    panel.insertBefore(el('div', 'pk-note fl-note', floridaLine()), at);
     // Pipes
     panel.insertBefore(el('div', 'pk-sec', 'Pipes'), status);
     const box = el('div', 'pk-opts');
@@ -12859,9 +12897,30 @@ function floridaLine() {
     panel.insertBefore(box, status);
     if (!flFresh() || Date.now() - FLWX.t > 10 * 60 * 1000) fetchFlorida();
   };
+  if (wxFrom === 'here') locateMe(false);   // already allowed: refresh where you are (no prompt)
   fetchFlorida();
   setInterval(() => { if (!document.hidden) fetchFlorida(); }, 10 * 60 * 1000);
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && (!FLWX || Date.now() - FLWX.t > 10 * 60 * 1000)) fetchFlorida(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && (!flFresh() || Date.now() - FLWX.t > 10 * 60 * 1000)) fetchFlorida(); });
+}
+
+// ---------- v153: the first pipe comes onto the screen 2 seconds after you tap to start ----------
+const FIRST_PIPE_WAIT = 2;
+function firstPipeWait() {   // when the spawner should drop the first pipe so it reaches the screen edge at 2 s
+  const v = viewBox(), pts = 200 * moving.speed * speedMul();   // pipes move 1 pt per 0.005 s
+  const travel = Math.max(0, (width + 30) - v.R);                   // spawned at width + 60, 30 pt half-width
+  return Math.max(0, FIRST_PIPE_WAIT - travel / pts);
+}
+{
+  const _sg = startGame;
+  startGame = function () {
+    const was = isWaitingToStart;
+    _sg();
+    if (!was || isWaitingToStart || afterlife !== 0 || (ending && ending.on)) return;
+    pipeList = pipeList.filter(p => p.gold || p.falling);   // clear sky: the pipes that scrolled by during Get Ready go
+    const a = spawnerAction();   // (setSpawnerRemaining caps the wait at one spawn interval)
+    if (a) { a.i = 1; a.started = true; a.t = a.steps[1].d - firstPipeWait(); }
+    if (ghostRec) { ghostRec.pipes = []; ghostRec.phase = spawnerRemaining(); }   // ghosts and race links record the same start
+  };
 }
 
 updateSettingsUI();
