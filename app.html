@@ -12706,7 +12706,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 150;
+const APP_BUILD = 151;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -12787,10 +12787,10 @@ function applyPipes() {   // swap the pictures every frame: classic during the e
 }
 
 // ---------- Auto weather = the weather in Florida right now ----------
-// Open-Meteo (free, no key). Orlando, in the middle of the state. Refreshed every 10 minutes; if it can't be
+// Open-Meteo (free, no key). Daytona Beach. Refreshed every 10 minutes; if it can't be
 // reached, Auto falls back to the old random weather for the season.
-const FL_PLACE = { name: 'Orlando, FL', lat: 28.5384, lon: -81.3789 };
-let FLWX = (() => { try { const o = JSON.parse(localStorage.getItem('fb_flwx') || 'null'); return o && o.w ? o : null; } catch (e) { return null; } })();
+const FL_PLACE = { name: 'Daytona Beach, FL', lat: 29.2108, lon: -81.0228 };
+let FLWX = (() => { try { const o = JSON.parse(localStorage.getItem('fb_flwx_daytona') || 'null'); return o && o.w ? o : null; } catch (e) { return null; } })();
 function wmoToWx(code, wind, gust) {
   if ([95, 96, 99].includes(code)) return 'storm';
   if ((code >= 71 && code <= 77) || code === 85 || code === 86) return 'snow';
@@ -12817,7 +12817,7 @@ async function fetchFlorida() {
     const j = await r.json(), c = j && j.current; if (!c || typeof c.weather_code !== 'number') throw new Error('no weather');
     const wind = +c.wind_speed_10m || 0, gust = +c.wind_gusts_10m || 0;
     FLWX = { w: wmoToWx(c.weather_code, wind, gust), code: c.weather_code, temp: Math.round(+c.temperature_2m), wind: Math.round(wind), day: c.is_day === 1, t: Date.now() };
-    try { localStorage.setItem('fb_flwx', JSON.stringify(FLWX)); } catch (e) {}
+    try { localStorage.setItem('fb_flwx_daytona', JSON.stringify(FLWX)); } catch (e) {}
     if (weatherPick === 'auto' && WX.weather !== FLWX.w) { WX.weather = FLWX.w; WX.seeded = false; }
     if (PK && PK.kind === 'weather') { const n = PK.panel.querySelector('.fl-note'); if (n) n.textContent = floridaLine(); }
   } catch (e) {} finally { flBusy = false; }
