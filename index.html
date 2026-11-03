@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.4'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.5'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12526,7 +12526,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 168;
+const APP_BUILD = 169;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13224,8 +13224,8 @@ function buildAchPage(page) {
 }
 {
   const st = document.createElement('style');
-  st.textContent = '.pk-locked{opacity:.5}.achv-stats{display:flex;gap:8px;margin:2px 0 10px}.achv-stat{flex:1;background:#ded895;border:2px solid #533846;border-radius:6px;padding:6px 4px;text-align:center;color:#533846}' +
-    '.achv-stat b{display:block;font-size:18px}.achv-stat span{display:block;font-size:10px;color:#fc7858;text-transform:uppercase;letter-spacing:1px;margin-top:2px}.achv-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:2px solid rgba(83,56,70,.15);opacity:.6}' +
+  st.textContent = '.pk-locked{opacity:.5}.achv-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin:2px 0 10px}.achv-stat{min-width:0;overflow:hidden;background:#ded895;border:2px solid #533846;border-radius:6px;padding:6px 4px;text-align:center;color:#533846}' +
+    '.achv-stat b{display:block;font-size:18px}.achv-stat span{display:block;font-size:min(10px,2.5vw);color:#fc7858;text-transform:uppercase;letter-spacing:min(1px,0.2vw);margin-top:2px}.achv-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:2px solid rgba(83,56,70,.15);opacity:.6}' +
     '.achv-row.on{opacity:1}.achv-ic{width:26px;height:26px;image-rendering:pixelated;flex:none}' +
     '.pk-achievements .pk-panel{max-height:min(66%,540px)}.achv-row{padding:6px 10px}';   // v160: not so tall
   document.head.appendChild(st);
@@ -13368,6 +13368,31 @@ function drawMood() {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
+  };
+}
+
+// v169: the 04b19 font draws a small "f" like an "s" (a username "jordanflap" read "jordansiap"): every bit of text
+// in that font in the menus shows a capital F, also text that arrives later (names filled in after loading)
+function b19FixIn(root) {
+  if (!root) return;
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    if (!/f/.test(n.nodeValue) || !n.parentElement) continue;
+    if (/04b19/i.test(getComputedStyle(n.parentElement).fontFamily)) n.nodeValue = n.nodeValue.replace(/f/g, 'F');
+  }
+}
+{
+  const _sp = showPage;
+  showPage = function (kind, first) {
+    const r = _sp(kind, first);
+    try {
+      if (PK && PK.panel && !PK.panel._b19) {
+        PK.panel._b19 = new MutationObserver(() => { try { b19FixIn(PK && PK.panel); } catch (e) {} });
+        PK.panel._b19.observe(PK.panel, { childList: true, subtree: true, characterData: true });
+      }
+      b19FixIn(PK.panel);
+    } catch (e) {}
+    return r;
   };
 }
 // ===================== v163: the bird sleeps at night, a seasonal logo =====================
