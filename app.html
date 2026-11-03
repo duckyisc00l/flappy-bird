@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.0'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.1'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12522,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 164;
+const APP_BUILD = 165;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13332,10 +13332,10 @@ function buildAchPage(page) {
   const got = lsList('fb_ach');
   const n = ACH.filter(a => got.includes(a.id)).length;
   page.appendChild(el('div', 'pk-note', n + ' of ' + ACH.length + ' unlocked'));
-  const stats = el('div', 'ac-stats');
-  for (const [t, v] of [['Crashes', lsNum('fb_lifeDeaths')], ['Pipes', lsNum('fb_lifePipes')], ['Rounds', lsNum('fb_lifeGames')]]) stats.appendChild(el('div', 'ac-stat', '')).append(el('b', '', String(v)), el('span', '', t));
+  const stats = el('div', 'achv-stats');
+  for (const [t, v] of [['Crashes', lsNum('fb_lifeDeaths')], ['Pipes', lsNum('fb_lifePipes')], ['Rounds', lsNum('fb_lifeGames')]]) stats.appendChild(el('div', 'achv-stat', '')).append(el('b', '', String(v)), el('span', '', t));
   page.appendChild(stats);
-  const list = el('div', 'st-list ac-scroll');
+  const list = el('div', 'st-list achv-scroll');
   const d = lsNum('fb_lifeDeaths'), next = SCAR_AT.find(x => x > d);
   const sr = el('button', 'st-row'), st = el('div', 'st-rt'), sw = el('span', 'st-sw' + (scarsOn ? ' on' : ''));
   st.append(el('div', 'st-rn', 'Battle scars'), el('div', 'st-rs', next ? 'Your bird gets a new scar at ' + next + ' crashes' : 'Your bird has seen it all'));
@@ -13344,7 +13344,7 @@ function buildAchPage(page) {
   list.appendChild(sr);
   for (const a of ACH) {
     const on = got.includes(a.id), hide = a.secret && !on;
-    const r = el('div', 'ac-row' + (on ? ' on' : '')), cv = el('canvas', 'ac-ic'), t = el('div', 'st-rt');
+    const r = el('div', 'achv-row' + (on ? ' on' : '')), cv = el('canvas', 'achv-ic'), t = el('div', 'st-rt');
     achIcon(cv, on, a.secret);
     t.append(el('div', 'st-rn', hide ? '???' : a.name), el('div', 'st-rs', hide ? 'Secret' : a.desc));
     r.append(cv, t);
@@ -13354,10 +13354,10 @@ function buildAchPage(page) {
 }
 {
   const st = document.createElement('style');
-  st.textContent = '.pk-locked{opacity:.5}.ac-stats{display:flex;gap:8px;margin:2px 0 10px}.ac-stat{flex:1;background:#ded895;border:2px solid #533846;border-radius:6px;padding:6px 4px;text-align:center;color:#533846}' +
-    '.ac-stat b{display:block;font-size:18px}.ac-stat span{font-size:12px;opacity:.8}.ac-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:2px solid rgba(83,56,70,.15);opacity:.6}' +
-    '.ac-row.on{opacity:1}.ac-ic{width:26px;height:26px;image-rendering:pixelated;flex:none}' +
-    '.pk-achievements .pk-panel{max-height:min(66%,540px)}.ac-row{padding:6px 10px}';   // v160: not so tall
+  st.textContent = '.pk-locked{opacity:.5}.achv-stats{display:flex;gap:8px;margin:2px 0 10px}.achv-stat{flex:1;background:#ded895;border:2px solid #533846;border-radius:6px;padding:6px 4px;text-align:center;color:#533846}' +
+    '.achv-stat b{display:block;font-size:18px}.achv-stat span{font-size:12px;opacity:.8}.achv-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:2px solid rgba(83,56,70,.15);opacity:.6}' +
+    '.achv-row.on{opacity:1}.achv-ic{width:26px;height:26px;image-rendering:pixelated;flex:none}' +
+    '.pk-achievements .pk-panel{max-height:min(66%,540px)}.achv-row{padding:6px 10px}';   // v160: not so tall
   document.head.appendChild(st);
   const _bs = buildSettingsPage;
   buildSettingsPage = function (page) {
