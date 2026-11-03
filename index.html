@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '5.6'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '5.7'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12525,7 +12525,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 160;
+const APP_BUILD = 161;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13406,6 +13406,200 @@ function buildAchPage(page) {
     const r = _sp(kind, first);
     try { for (const t of PK.panel.querySelectorAll('.pk-title')) if (/f/.test(t.textContent)) t.textContent = t.textContent.replace(/f/g, 'F'); } catch (e) {}
     return r;
+  };
+}
+// ===================== v161: the scared pipe, last words, the pipe graveyard, bird moods, old version day =====================
+
+ACH.push(
+  { id: 'scared', name: 'Scaredy Pipe', desc: 'A pipe got out of your way.', secret: true },
+  { id: 'oldday', name: 'Happy Birthday', desc: 'Play on Flappy Birds birthday (May 24).', secret: true });
+{ const _sk = saveKind; saveKind = function (k) { if (k === 'fb_pipeGraves') return 'scalar'; return _sk(k); }; }
+SAVE_SCALARS.push('fb_graveyard');
+
+// ---------- old version day: on Flappy Bird's birthday (May 24) the game is plain, the way it started ----------
+let OLD_FORCE = false;   // (Developer page)
+function oldDay() { const d = new Date(); return OLD_FORCE || (d.getMonth() === 4 && d.getDate() === 24); }
+{
+  const _wo = weatherOn;
+  weatherOn = function () { return !oldDay() && _wo(); };
+  const _dt = drawTrail;
+  drawTrail = function (layer) { if (oldDay()) return; _dt(layer); };
+}
+
+// ======================================================= the scared pipe
+// Very rarely (about 1 pipe in 35, from 3 points on, never in the Daily) a pipe flinches when you get close
+// and pulls its two halves apart to let you through.
+function scareOK(p) { return gameMode !== 'daily' && !WATCH && afterlife === 0 && !haunted && !(ending && ending.on) && !glitchVisible() && !p.gold && !p.falling && !p.amp && !p.red && score >= 3; }
+let SCARE_FORCE = false;
+function scareTick(dt) {
+  for (const p of pipeList) {
+    if (!p.scareRolled && p.gx - bird.x < 230 && p.gx > bird.x) {
+      p.scareRolled = true;
+      if (bird.dynamic && !isGameOver && scareOK(p) && (SCARE_FORCE || Math.random() < 1 / 35)) { SCARE_FORCE = false; p.scare = { t: 0, d: 0 }; }
+    }
+    const s = p.scare; if (!s) continue;
+    s.t += dt;
+    const want = s.t < 0.18 ? 0 : 74 * Math.min(1, (s.t - 0.18) / 0.32);   // a flinch, then it slides apart
+    const step = want - s.d; s.d = want;
+    if (step) { p.y -= step / 2; p.gap = (p.gap || C.verticalPipeGap) + step; }
+    if (!s.got && p.scored) { s.got = true; if (!runUsedBot) achUnlock('scared'); }
+  }
+}
+function drawScared() {
+  for (const p of pipeList) {
+    const s = p.scare; if (!s || s.t > 1.1) continue;
+    const shake = s.t < 0.18 ? (Math.floor(s.t * 60) % 2 ? 2 : -2) : 0;
+    const top = p.y + 160 + (p.gap || C.verticalPipeGap) / 2 + 6, x = p.gx + shake;   // "!!" in the middle of the gap
+    ctx.globalAlpha = Math.min(1, (1.1 - s.t) / 0.3);
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(x - 7), Math.round(top - 14), 4, 10); ctx.fillRect(Math.round(x - 7), Math.round(top - 20), 4, 4);
+    ctx.fillRect(Math.round(x + 3), Math.round(top - 14), 4, 10); ctx.fillRect(Math.round(x + 3), Math.round(top - 20), 4, 4);
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ======================================================= last words
+const LAST_WORDS = ['WORTH IT', 'TELL MY EGGS', 'NOT AGAIN', 'I REGRET NOTHING', 'THAT PIPE MOVED', 'MY WINGS', 'WHY', 'ONE MORE TRY',
+  'BAD IDEA', 'I SAW A LIGHT', 'OUCH', 'RUDE', 'I MEANT THAT', 'SKILL ISSUE', 'TOTALLY FINE', 'AVENGE ME', 'SO CLOSE', 'NEXT TIME PIPE', 'I BLINKED', 'LAG'];
+const LW = { text: '', t: 9 };
+function lastWords() {
+  if (afterlife || (ending && ending.on)) return;
+  let pool = LAST_WORDS;
+  if (score <= 0) pool = ['WAIT WHAT', 'TOO SOON', 'I WAS NOT READY', 'OOPS'];
+  else if (score > bestScore() && score >= 5) pool = ['NEW RECORD THO', 'WORTH IT', 'REMEMBER ME'];
+  LW.text = pool[Math.floor(Math.random() * pool.length)]; LW.t = -0.35;
+}
+function drawLastWords(dt) {
+  if (!LW.text) return;
+  LW.t += dt;
+  if (!isShowingGameOver || LW.t > 2.6) { LW.text = ''; return; }
+  if (LW.t < 0) return;
+  const a = Math.min(1, LW.t / 0.15, (2.6 - LW.t) / 0.3), w = glyphWidth(LW.text, 2) + 14, h = 18;
+  const by = worldFlipped() ? SH - bird.y : bird.y, cx = Math.max(viewBox().L + w / 2 + 6, bird.x + 10), y0 = by + 30;
+  ctx.globalAlpha = Math.max(0, a);
+  ctx.fillStyle = '#533846'; ctx.fillRect(Math.round(cx - w / 2) - 2, Math.round(y0) - 2, w + 4, h + 4);
+  ctx.fillStyle = '#ffffff'; ctx.fillRect(Math.round(cx - w / 2), Math.round(y0), w, h);
+  ctx.fillStyle = '#533846'; ctx.fillRect(Math.round(bird.x - 2), Math.round(y0) - 6, 4, 4);   // the bubble's tail
+  glyphText(LW.text, Math.round(cx - glyphWidth(LW.text, 2) / 2), Math.round(y0) + 14, '#533846', 2);
+  ctx.globalAlpha = 1;
+}
+
+// ======================================================= the pipe graveyard
+let graveOn = loadBool('graveyard', true);
+function graves() { return lsList('fb_pipeGraves').map(Number).filter(n => n >= 0); }
+const STONE = [['..sss..', '.sSSSs.', 'sSSSSSs', 'sSSSSSs', 'sSSSSSs', 'sSSSSSs', 'sSSSSSs', 'sSSSSSs', 'mmmmmmm'], { s: '#6a6a78', S: '#a0a0ae', m: '#7a5a3a' }];
+let STONE_IM = null;
+function drawGraveyard() {
+  if (!graveOn || !weatherOn() || haunted) return;
+  const g = graves(); if (!g.length) return;
+  if (!STONE_IM) STONE_IM = pixCanvas(STONE[0], STONE[1]);
+  const landW = 336 * 2, n = 2 + Math.floor(width / landW), shown = g.slice(-12).reverse();
+  for (let i = 0; i < n; i++) {
+    const left = groundX + i * (landW - 1) - 336;
+    shown.forEach((sc, j) => {
+      const x = Math.round(left + 30 + j * 56), base = 46;
+      spr(STONE_IM, x, base + 13.5, 3, 3, 0);
+      const t = String(sc); glyphText(t, Math.round(x - glyphWidth(t, 1) / 2), base + 20, '#3a3a46', 1);
+    });
+  }
+}
+function graveAdd() {
+  if (!contactPipe || !realRun() || haunted || afterlife || (ending && ending.on) || glitchVisible()) return;
+  const g = lsList('fb_pipeGraves'); g.push(String(Math.max(0, score))); lsSetList('fb_pipeGraves', g.slice(-40));
+}
+
+// ======================================================= bird moods
+// happy after a new best, grumpy after crashing before the first pipe, sleepy if you haven't played for a day
+function mood() {
+  const last = lsNum('fb_lastPlay');
+  if (last && Date.now() - last > 24 * 3600000) return 'sleepy';
+  try { const o = JSON.parse(localStorage.getItem('fb_mood') || 'null'); if (o && o.m) return o.m; } catch (e) {}
+  return '';
+}
+function moodSet() {
+  if (!realRun() || haunted) return;
+  const m = score > bestScore() && score >= 5 ? 'happy' : score <= 0 ? 'grumpy' : '';
+  try { localStorage.setItem('fb_mood', JSON.stringify({ m, t: Date.now() })); } catch (e) {}
+  lsSetNum('fb_lastPlay', Date.now());
+}
+const MOOD_ART = {
+  cloud: [['...ggg...', '.gggggggg', 'ggggggggg', '.ggggggg.', '....y....', '...y.....', '....y....'], { g: '#5a5a6a', y: '#ffd23c' }],
+};
+let MOOD_IM = {};
+function drawMood() {
+  if (afterlife || haunted || (ending && ending.on) || bird.dynamic || !bird.added) return;
+  const m = mood(); if (!m) return;
+  const t = sceneTime, by = worldFlipped() ? SH - bird.y : bird.y, x = bird.x, y = by + 30;
+  if (m === 'happy') {
+    const h = pix('heart'); if (h) spr(h, Math.round(x + 6), Math.round(y + 4 + Math.sin(t * 3) * 3), 2, 2, 0);
+    if (Math.floor(t * 3) % 2) { ctx.fillStyle = '#fff6a0'; ctx.fillRect(Math.round(x - 16), Math.round(y + 8), 2, 2); ctx.fillRect(Math.round(x + 22), Math.round(y + 14), 2, 2); }
+  } else if (m === 'grumpy') {
+    if (!MOOD_IM.cloud) MOOD_IM.cloud = pixCanvas(MOOD_ART.cloud[0], MOOD_ART.cloud[1]);
+    spr(MOOD_IM.cloud, Math.round(x + 2 + Math.sin(t * 2) * 2), Math.round(y + 10), 3, 3, 0);
+  } else if (m === 'sleepy') {
+    for (let i = 0; i < 3; i++) {
+      const f = ((t * 0.5 + i / 3) % 1), k = [1, 2, 2][i];
+      ctx.globalAlpha = Math.min(1, (1 - f) * 2);
+      glyphText('Z', Math.round(x + 14 + f * 16 + i * 3), Math.round(y + f * 30 + 6), '#ffffff', k + f);
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// ======================================================= hooks
+{
+  const _up = update;
+  update = function (dt) {
+    _up(dt);
+    if (GL.phase === 'crash') return;
+    try { scareTick(dt); } catch (e) {}
+  };
+  const _go = gameOver;
+  gameOver = function () {
+    if (!isShowingGameOver) { try { graveAdd(); lastWords(); moodSet(); } catch (e) {} }
+    _go();
+  };
+  const _sg = drawSeasonGround;
+  drawSeasonGround = function () { _sg(); try { drawGraveyard(); } catch (e) {} };
+  let lastT = 0;
+  const _sb = drawStopButton;
+  drawStopButton = function () {
+    const now = performance.now() / 1000, dt = lastT ? Math.min(0.1, now - lastT) : 0; lastT = now;
+    try { drawScared(); drawMood(); drawLastWords(dt); } catch (e) {}
+    _sb();
+  };
+  // old version day: say so once on the title, and count the achievement
+  let told = '';
+  const _ach = drawAchBanner;
+  drawAchBanner = function (dt) {
+    const day = new Date().toDateString();
+    if (oldDay() && told !== day && !bird.dynamic && flappyBird.added) {
+      told = day; const age = new Date().getFullYear() - 2013;
+      achBanner('FLAPPY BIRD IS ' + age + ' TODAY', 'THE CLASSIC LOOK ALL DAY');
+    }
+    _ach(dt);
+  };
+  const _sr = setResultScore;
+  setResultScore = function (s) { _sr(s); if (oldDay() && realRun()) achUnlock('oldday'); };
+  // switches on the Achievements page, and the Developer page
+  const _ap = buildAchPage;
+  buildAchPage = function (page) {
+    _ap(page);
+    const list = page.querySelector('.ac-scroll'); if (!list) return;
+    const r = el('button', 'st-row'), t = el('div', 'st-rt'), sw = el('span', 'st-sw' + (graveOn ? ' on' : ''));
+    t.append(el('div', 'st-rn', 'Pipe graveyard'), el('div', 'st-rs', 'The pipes that got you, as little gravestones on the ground'));
+    r.append(t, sw);
+    r.addEventListener('click', () => { graveOn = !graveOn; saveBool('graveyard', graveOn); sw.classList.toggle('on', graveOn); playSound('swoosh'); haptic(); });
+    list.insertBefore(r, list.children[1] || null);
+  };
+  const _dv = buildDevPage;
+  buildDevPage = function (page) {
+    _dv(page);
+    const box = el('div', 'pk-opts');
+    for (const [label, fn] of [['Scared pipe next', () => { SCARE_FORCE = true; }], ['Old version day', () => { OLD_FORCE = !OLD_FORCE; rollWeather(); }], ['Mood: happy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'happy', t: Date.now() })); }],
+      ['Mood: grumpy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'grumpy', t: Date.now() })); }], ['Mood: sleepy', () => { lsSetNum('fb_lastPlay', Date.now() - 2 * 86400000); }]]) {
+      const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
+    }
+    page.appendChild(box);
   };
 }
 
