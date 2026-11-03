@@ -5293,7 +5293,7 @@ function render() {
   drawGhost();
   // bird (z -1)
   drawTrail(0);                        // trail / effect behind the bird
-  if (bird.added) spr(birdFrame(), bird.x, bird.y, bird.scale * birdSX(), bird.scale * birdSY(), bird.rot);   // v174: squash and stretch
+  if (bird.added) spr(birdFrame(), bird.x, bird.y, bird.scale, bird.scale, bird.rot);
   drawTrail(1);                        // ... and the parts in front of it
 
   // land (z 0): 3 tiles, scale 2, spaced width-1
@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '7.0'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '7.1'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12526,7 +12526,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 174;
+const APP_BUILD = 175;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13659,62 +13659,6 @@ setTimeout(purgeOwnRaces, 1500); setInterval(purgeOwnRaces, 5000);
     const first = !isShowingGameOver;
     _go();
     if (first && afterlife === 0 && !(ending && ending.on) && !haunted && shakeT >= 1.2) shakeT = 0.8;   // (a few pixels, dying away in half a second)
-  };
-}
-// ===================== v174: animation: squash and stretch, and a feather puff when you crash =====================
-// (only how things are drawn: the bird's hitbox, the physics and the pipes are exactly the same)
-const ANIM = { kind: '', t: 9 };
-function birdWobble() {   // a spring that dies away: 1 at the start, then a small bounce back
-  const t = ANIM.t; if (t > 0.6 || !ANIM.kind || afterlife >= 2) return 0;
-  return ANIM.kind === 'flap' ? Math.exp(-t * 9) * Math.cos(t * 20) : Math.exp(-t * 8) * Math.cos(t * 18);
-}
-function birdSX() { const w = birdWobble(); return ANIM.kind === 'flap' ? 1 - 0.13 * w : 1 + 0.26 * w; }   // flap: taller and thinner; a hit: flat and wide
-function birdSY() { const w = birdWobble(); return ANIM.kind === 'flap' ? 1 + 0.15 * w : 1 - 0.22 * w; }
-const FEATHERS = [];
-function featherPuff() {
-  let col = '#f8c030';
-  try { const e = birdEye(birdFrame()); if (e && e.L) col = e.L; } catch (e) {}
-  for (let i = 0; i < 8; i++) {
-    const a = Math.random() * Math.PI * 2, sp = 60 + Math.random() * 110;
-    FEATHERS.push({ x: bird.x + Math.cos(a) * 6, y: bird.y + Math.sin(a) * 6, vx: Math.cos(a) * sp - 30, vy: Math.sin(a) * sp + 80, t: 0, life: 0.9 + Math.random() * 0.5,
-      ph: Math.random() * 6, c: i % 3 === 0 ? '#ffffff' : col });
-  }
-}
-{
-  const _fb = flapBird;
-  flapBird = function () { const before = lastFlapTime; _fb(); if (lastFlapTime !== before || lastFlapTime === sceneTime) { ANIM.kind = 'flap'; ANIM.t = 0; } };
-  const _go = gameOver;
-  gameOver = function () {
-    const first = !isShowingGameOver;
-    _go();
-    if (first) { ANIM.kind = 'hit'; ANIM.t = 0; if (afterlife === 0 && !(ending && ending.on)) featherPuff(); }
-  };
-  const _hg = handleGroundCollision;
-  handleGroundCollision = function () { const first = !hasHitGround; _hg(); if (first) { ANIM.kind = 'hit'; ANIM.t = 0.04; } };
-  const _up = update;
-  update = function (dt) {
-    _up(dt);
-    if (PAUSE.on || GL.phase === 'crash') return;
-    ANIM.t += dt;
-    for (const f of FEATHERS) { f.t += dt; f.vy -= 260 * dt; f.vx *= Math.pow(0.4, dt); f.vy = Math.max(f.vy, -70); f.x += (f.vx + Math.sin(f.t * 7 + f.ph) * 30) * dt; f.y += f.vy * dt; }
-    for (let i = FEATHERS.length - 1; i >= 0; i--) if (FEATHERS[i].t > FEATHERS[i].life || FEATHERS[i].y < 112) FEATHERS.splice(i, 1);
-    if (!inRun()) FEATHERS.length = 0;
-  };
-  const _sb = drawStopButton;
-  drawStopButton = function () {
-    if (FEATHERS.length && !worldFlipped()) {
-      try {
-        for (const f of FEATHERS) {
-          const a = Math.min(1, (f.life - f.t) / 0.3), flip = Math.sin(f.t * 9 + f.ph) > 0;   // feathers flutter as they fall
-          ctx.globalAlpha = Math.max(0, a); ctx.fillStyle = '#533846';
-          const w = flip ? 6 : 3, h = flip ? 3 : 6;
-          ctx.fillRect(Math.round(f.x - w / 2) - 1, Math.round(f.y - h / 2) - 1, w + 2, h + 2);
-          ctx.fillStyle = f.c; ctx.fillRect(Math.round(f.x - w / 2), Math.round(f.y - h / 2), w, h);
-        }
-        ctx.globalAlpha = 1;
-      } catch (e) {}
-    }
-    _sb();
   };
 }
 
