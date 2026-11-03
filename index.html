@@ -12525,7 +12525,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 159;
+const APP_BUILD = 160;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13359,7 +13359,8 @@ function buildAchPage(page) {
   const st = document.createElement('style');
   st.textContent = '.pk-locked{opacity:.5}.ac-stats{display:flex;gap:8px;margin:2px 0 10px}.ac-stat{flex:1;background:#ded895;border:2px solid #533846;border-radius:6px;padding:6px 4px;text-align:center;color:#533846}' +
     '.ac-stat b{display:block;font-size:18px}.ac-stat span{font-size:12px;opacity:.8}.ac-row{display:flex;align-items:center;gap:10px;padding:8px 10px;border-bottom:2px solid rgba(83,56,70,.15);opacity:.6}' +
-    '.ac-row.on{opacity:1}.ac-ic{width:30px;height:30px;image-rendering:pixelated;flex:none}';
+    '.ac-row.on{opacity:1}.ac-ic{width:26px;height:26px;image-rendering:pixelated;flex:none}' +
+    '.pk-achievements .pk-panel{max-height:min(66%,540px)}.ac-row{padding:6px 10px}';   // v160: not so tall
   document.head.appendChild(st);
   const _bs = buildSettingsPage;
   buildSettingsPage = function (page) {
