@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.5'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.6'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12522,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 169;
+const APP_BUILD = 170;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13556,6 +13556,35 @@ function myRunIds() { return lsList('fb_myRuns'); }
     const mine = (accSignedIn() && row.user_id && ACCT.user && row.user_id === ACCT.user.id) || myRunIds().includes(row.id) || Object.values(linkCache).includes(row.id);
     if (mine) throw new Error("That's your own run. Send the link to a friend so they can race you!");
     return row;
+  };
+}
+// ===================== v170: leaving the game in the middle of a round pauses it =====================
+// (a notification, another app, a call: before, the round went on, or carried on the moment you came back,
+// and the bird crashed before you could react). Tap to go on: that tap is a flap, like any other.
+const PAUSE = { on: false, t: 0 };
+function pauseNow() {
+  if (PAUSE.on || !bird.dynamic || isGameOver || isShowingGameOver || autoplay || runUsedBot || afterlife !== 0 || GL.phase === 'crash' || liveRoom || WATCH) return;
+  PAUSE.on = true; PAUSE.t = 0;
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden) pauseNow(); });
+window.addEventListener('blur', pauseNow);
+window.addEventListener('pagehide', pauseNow);
+{
+  const _up = update;
+  update = function (dt) { if (PAUSE.on) { PAUSE.t += dt; return; } _up(dt); };   // everything stops, exactly where it was
+  const _tb = touchesBegan;
+  touchesBegan = function (px, py) { if (PAUSE.on) { PAUSE.on = false; playSound('swoosh'); } return _tb(px, py); };
+  const _sb = drawStopButton;
+  drawStopButton = function () {
+    _sb();
+    if (!PAUSE.on) return;
+    try {
+      const v = viewBox();
+      ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(v.L - 10, -10, v.R - v.L + 20, SH + 20);
+      const t1 = 'PAUSED', t2 = 'TAP TO GO ON', cx = width / 2, y = SH / 2 + 70;
+      glyphText(t1, Math.round(cx - glyphWidth(t1, 6) / 2), y, '#ffffff', 6);
+      if (Math.floor(performance.now() / 600) % 2 === 0) glyphText(t2, Math.round(cx - glyphWidth(t2, 2) / 2), y - 52, '#efeaa9', 2);
+    } catch (e) {}
   };
 }
 
