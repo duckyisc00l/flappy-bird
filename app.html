@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '5.8'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '5.9'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -7490,7 +7490,8 @@ async function makeScoreCard(d) {
   else pxBox(g, nb.x, nb.y, nb.w, nb.h, '#fc7858', '#533846', '#ffa587', '#d85c40', 6);
   if (scary) drawScaryName(g, nb.x + 150, nb.y, nb.w - 170, nb.h);
   else {
-    const name = skinName(d.bird).slice(0, 18);
+    // v163: your username (the bird's name when you're not signed in); the font's small f looks like an s
+    const name = ((typeof onlineName === 'function' && onlineName()) || skinName(d.bird)).slice(0, 18).replace(/f/g, 'F');
     let fs = 50; g.font = `${fs}px "04b19", monospace`;
     while (g.measureText(name).width > nb.w - 230 && fs > 26) { fs -= 2; g.font = `${fs}px "04b19", monospace`; }
     txt(g, name, nb.x + 150 + (nb.w - 150) / 2, nb.y + nb.h / 2 + fs * 0.36, fs, '"04b19"', '#fff', '#533846', 10);
@@ -12521,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 162;
+const APP_BUILD = 163;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13496,6 +13497,187 @@ function drawMood() {
     const box = el('div', 'pk-opts');
     for (const [label, fn] of [['Old version day', () => { OLD_FORCE = !OLD_FORCE; rollWeather(); }], ['Mood: happy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'happy', t: Date.now() })); }],
       ['Mood: grumpy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'grumpy', t: Date.now() })); }], ['Mood: sleepy', () => { lsSetNum('fb_lastPlay', Date.now() - 2 * 86400000); }]]) {
+      const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
+    }
+    page.appendChild(box);
+  };
+}
+// ===================== v163: the bird sleeps at night, a seasonal logo, the bird reacts to the weather =====================
+
+// ---------- drawing in a sprite's own pixels (y down, like the picture), so extras sit exactly on it ----------
+function inSprite(x, y, s, rot, w, h, fn) {
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, -s); ctx.translate(-w / 2, -h / 2);
+  fn(); ctx.restore();
+}
+function px1(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }
+// what a picture looks like inside: its pixels (cached)
+const PXDATA = new Map();
+function pixData(im) {
+  if (PXDATA.has(im)) return PXDATA.get(im);
+  let out = null;
+  try {
+    const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height, c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d'); g.drawImage(im, 0, 0); out = { w, h, d: g.getImageData(0, 0, w, h).data };
+  } catch (e) {}
+  PXDATA.set(im, out);
+  return out;
+}
+// the bird's eye: which big pixels are the eye, and the colours around it
+const EYES = new Map();
+function birdEye(im) {
+  if (EYES.has(im)) return EYES.get(im);
+  let out = null;
+  const P = pixData(im);
+  if (P) {
+    const { w, h, d } = P, ox = Math.round((w - 34) / 2), oy = Math.round((h - 24) / 2);
+    const px = (x, y) => { const X = ox + x * 2, Y = oy + y * 2; if (X < 0 || Y < 0 || X >= w || Y >= h) return null; const i = (Y * w + X) * 4; return d[i + 3] > 10 ? [d[i], d[i + 1], d[i + 2]] : null; };
+    const hex = (c) => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
+    const white = px(11, 2), pupil = px(12, 3), lid = px(8, 2) || px(7, 2), line = px(7, 0);
+    if (white && pupil && lid) {
+      const near = (a, b) => a && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 40;
+      const cells = [];
+      for (let y = 0; y <= 6; y++) for (let x = 8; x <= 15; x++) { const c = px(x, y); if (near(c, white) || (near(c, pupil) && x >= 11 && y >= 2 && y <= 5)) cells.push([x, y]); }
+      if (cells.length >= 6) {
+        const ys = cells.map(c => c[1]), xs = cells.map(c => c[0]);
+        out = { cells, top: Math.min(...ys), bot: Math.max(...ys), left: Math.min(...xs), right: Math.max(...xs), L: hex(lid), O: line ? hex(line) : '#533846', ox, oy, w, h };
+      }
+    }
+  }
+  EYES.set(im, out);
+  return out;
+}
+function onBird(fn) {   // draw on the bird, in its picture's pixels (cells are 2 x 2)
+  const im = birdFrame(); if (!im || !bird.added) return;
+  const w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+  inSprite(bird.x, bird.y, bird.scale, bird.rot, w, h, () => fn(im, w, h, Math.round((w - 34) / 2), Math.round((h - 24) / 2)));
+}
+function birdExtrasOK() { return bird.added && afterlife === 0 && !haunted && !(ending && ending.on) && !worldFlipped() && !glitchVisible(); }
+
+// ======================================================= the bird sleeps at night (3 to 6 AM, on the title screen)
+let SLEEP_FORCE = false;   // (Developer page)
+function sleepyHour() { const h = new Date().getHours(); return SLEEP_FORCE || (h >= 3 && h < 6); }
+function onTitle() { return flappyBird.added && playButton.added && !bird.dynamic && !isWaitingToStart && !isGameOver && !isShowingGameOver; }
+function sleepingNow() { return sleepyHour() && onTitle() && birdExtrasOK(); }
+function drawSleep() {
+  if (!sleepingNow()) return;
+  const t = sceneTime, doze = (t % 6) > 3.6 && (t % 6) < 5.4;   // every few seconds it nods off completely, then jerks awake
+  onBird((im) => {
+    const e = birdEye(im); if (!e) return;
+    const shut = doze ? e.bot : Math.round((e.top + e.bot) / 2);   // half closed, or all the way
+    for (const [x, y] of e.cells) if (y <= shut) px1(e.ox + x * 2, e.oy + y * 2, 2, 2, e.L);
+    px1(e.ox + e.left * 2, e.oy + shut * 2 + 1, (e.right - e.left + 1) * 2, 1, e.O);   // the eyelid's edge
+  });
+  // Zzz
+  const x = bird.x, y = bird.y + 30;
+  for (let i = 0; i < 3; i++) {
+    const f = ((t * 0.4 + i / 3) % 1), k = [1, 2, 2][i];
+    ctx.globalAlpha = Math.min(1, (1 - f) * 2);
+    glyphText('Z', Math.round(x + 14 + f * 16 + i * 3), Math.round(y + f * 30 + 6), '#ffffff', k + f);
+  }
+  ctx.globalAlpha = 1;
+}
+{ const _dm = drawMood; drawMood = function () { if (sleepingNow()) return; _dm(); }; }   // (sleep wins over moods)
+
+// ======================================================= the logo dresses up for the season
+const LOGO_TOP = new Map();
+function logoTops(im) {   // for every column of the logo: its top pixel (-1 = empty)
+  if (LOGO_TOP.has(im)) return LOGO_TOP.get(im);
+  const P = pixData(im); let out = null;
+  if (P) { out = []; for (let x = 0; x < P.w; x++) { let top = -1; for (let y = 0; y < P.h; y++) if (P.d[(y * P.w + x) * 4 + 3] > 40) { top = y; break; } out.push(top); } }
+  LOGO_TOP.set(im, out);
+  return out;
+}
+function hash1(n) { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); }
+function drawLogoSeason() {
+  if (!flappyBird.added || flappyBird.scale <= 0 || !weatherOn()) return;
+  const s = WX.season; if (!s || s === 'classic') return;
+  const im = img.flappy_logo; if (!ok(im)) return;
+  const tops1 = logoTops(im); if (!tops1) return;
+  // the logo is drawn in 2 x 2 "big pixels": decorate in the same big pixels
+  const w = Math.floor(im.naturalWidth / 2), h = Math.floor(im.naturalHeight / 2), t = sceneTime;
+  const tops = []; for (let x = 0; x < w; x++) { const a = tops1[2 * x], b = tops1[2 * x + 1], m = a < 0 ? b : b < 0 ? a : Math.min(a, b); tops.push(m < 0 ? -1 : Math.floor(m / 2)); }
+  inSprite(flappyBird.x, flappyBird.y, flappyBird.scale * 2, 0, w, h, () => {
+    if (s === 'winter' || s === 'christmas') {   // snow on top of every letter
+      tops.forEach((y, x) => { if (y < 0) return; const lump = hash1(x) > 0.6 ? 1 : 0; px1(x, y - lump, 1, lump + 1, '#ffffff'); });
+      if (s === 'christmas') for (let x = 4; x < w - 4; x += 7) { if (tops[x] < 0) continue; px1(x, tops[x] - 2, 1, 1, ['#e8281e', '#2fbf3f', '#ffd23c'][Math.floor(x / 7) % 3]); }
+    } else if (s === 'spring') {   // little flowers growing on the letters
+      for (let x = 3; x < w - 3; x += 9) { const y = tops[x]; if (y < 0) continue; const c = ['#ff7ab8', '#ffffff', '#c890ff'][Math.floor(x / 9) % 3];
+        px1(x, y - 3, 1, 3, '#3a9a3a'); px1(x - 1, y - 5, 3, 1, c); px1(x, y - 6, 1, 3, c); px1(x, y - 5, 1, 1, '#ffd23c'); }
+    } else if (s === 'summer') {   // a sun coming up behind the corner
+      const cx = w - 2, cy = -1, r = 4;
+      for (let y = -6; y <= 6; y++) for (let x = -6; x <= 6; x++) { const d = Math.hypot(x, y); if (d <= r) px1(cx + x, cy + y, 1, 1, d > r - 1.2 ? '#ffb020' : '#ffe14a'); }
+      for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4 + t * 0.3; px1(Math.round(cx + Math.cos(a) * 6), Math.round(cy + Math.sin(a) * 6), 1, 1, '#ffe680'); }
+    } else if (s === 'fall' || s === 'thanksgiving') {   // leaves on top, one drifting down
+      for (let x = 2; x < w - 2; x += 5) { const y = tops[x]; if (y < 0) continue; px1(x, y - 1, 2, 1, ['#e8742a', '#c8401e', '#f0b030'][Math.floor(x / 5) % 3]); }
+      const f = (t * 0.15) % 1, lx = Math.round(w * 0.3 + Math.sin(t * 2) * 6 + f * 20), ly = Math.round(-6 + f * (h + 10));
+      px1(lx, ly, 1, 1, '#e8742a');
+    } else if (s === 'halloween') {   // cobwebs in the corners, a spider on a thread
+      const web = (cx, cy, dx) => {   // corner webs: three spokes and two rings
+        for (let i = 0; i < 8; i++) { px1(cx + dx * i, cy - 1, 1, 1, '#e8e8f0'); px1(cx - (dx > 0 ? 1 : -1) * 0, cy - 1 + i, 1, 1, '#e8e8f0'); px1(cx + dx * Math.round(i * 0.8), cy - 1 + Math.round(i * 0.8), 1, 1, '#e8e8f0'); }
+        for (const r of [3, 6]) for (let i = 0; i <= r; i++) px1(cx + dx * i, cy - 1 + r - i, 1, 1, '#cfcfdc'); };
+      web(0, 0, 1); web(w - 1, 0, -1);
+      const sx = Math.round(w * 0.3), drop = 3 + Math.round((Math.sin(t * 1.3) + 1) * 3);   // a spider on a thread under the "a"
+      px1(sx, h - 3, 1, drop + 3, '#e8e8f0');
+      px1(sx - 1, h + drop, 3, 2, '#1e1028'); px1(sx - 2, h + drop - 1, 1, 1, '#1e1028'); px1(sx + 2, h + drop - 1, 1, 1, '#1e1028'); px1(sx - 2, h + drop + 2, 1, 1, '#1e1028'); px1(sx + 2, h + drop + 2, 1, 1, '#1e1028');
+      px1(sx - 1, h + drop, 1, 1, '#ff3030'); px1(sx + 1, h + drop, 1, 1, '#ff3030');
+    } else if (s === 'valentine') {   // hearts on top
+      for (let x = 5; x < w - 5; x += 11) { const y = tops[x]; if (y < 0) continue; const b = Math.round(Math.sin(t * 3 + x) * 1);
+        px1(x - 1, y - 5 + b, 2, 1, '#e8285a'); px1(x + 2, y - 5 + b, 2, 1, '#e8285a'); px1(x - 1, y - 4 + b, 5, 1, '#e8285a'); px1(x, y - 3 + b, 3, 1, '#e8285a'); px1(x + 1, y - 2 + b, 1, 1, '#e8285a'); }
+    } else if (s === 'newyear') {   // a party hat on the F, confetti falling
+      let fx = tops.findIndex(y => y >= 0); if (fx < 0) fx = 0; const fy = tops[fx];
+      for (let i = 0; i < 6; i++) px1(fx + 3 - Math.floor(i / 2), fy - 6 + i, 1 + 2 * Math.floor(i / 2), 1, i % 2 ? '#ffd23c' : '#3c4bff');   // a little cone
+      px1(fx + 2, fy - 8, 3, 2, '#ff4fa3');
+      for (let i = 0; i < 12; i++) { const f = (t * 0.25 + hash1(i)) % 1; px1(Math.round(hash1(i + 9) * w), Math.round(-5 + f * (h + 8)), 1, 1, ['#ff4fa3', '#ffd23c', '#3cb0ff', '#7be36b'][i % 4]); }
+    }
+  });
+}
+
+// ======================================================= the bird reacts to the weather
+// clear and sunny: sunglasses. Rain or a storm: a little umbrella. Snow: snow on its head, and it shivers.
+const UMBRELLA = ['......OOOO......', '....OOrrwwOO....', '..OOrrrwwwrrOO..', '.OrrrrwwwwrrrrO.', 'OOOOOOOOOOOOOOOO', '.......O........', '.......O........', '.......O........', '.......O........'];
+let WX_FORCE = '';   // (Developer page)
+function wxReaction() {
+  if (!birdExtrasOK() || gameMode === 'night' || sleepingNow()) return '';
+  const w = WX_FORCE || (weatherOn() ? WX.weather : '');
+  if (w === 'clear' && !skyIsNight) return 'sun';
+  if (w === 'rain' || w === 'storm') return 'rain';
+  if (w === 'snow') return 'snow';
+  return '';
+}
+function drawWeatherReaction() {
+  const r = wxReaction(); if (!r) return;
+  onBird((im, w, h, ox, oy) => {
+    if (r === 'sun') {   // sunglasses over the eye
+      const e = birdEye(im); if (!e) return;
+      for (const [x, y] of e.cells) px1(ox + x * 2, oy + y * 2, 2, 2, '#16141c');
+      px1(ox + e.left * 2 - 2, oy + e.top * 2 + 1, 2, 1, '#16141c');                          // the arm
+      px1(ox + (e.left + 1) * 2, oy + e.top * 2 + 1, 1, 1, '#ffffff'); px1(ox + (e.left + 1) * 2 + 1, oy + e.top * 2 + 2, 1, 1, '#9aa0b0');   // a glint
+    } else if (r === 'rain') {   // an umbrella held over its head
+      const cx = ox + 16, top = oy + 1 - UMBRELLA.length * 2;   // (in the bird's big pixels; the handle reaches its head)
+      UMBRELLA.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '.') return; px1(cx - 16 + i * 2, top + j * 2, 2, 2, ch === 'O' ? '#533846' : ch === 'r' ? '#e8281e' : '#ffffff'); }));
+    } else if (r === 'snow') {   // snow piled on its head
+      const P = pixData(im); if (!P) return;
+      for (let x = ox + 10; x < ox + 28 && x < w; x++) { let top = -1; for (let y = 0; y < h; y++) if (P.d[(y * P.w + x) * 4 + 3] > 40) { top = y; break; }
+        if (top < 0) continue; const lump = hash1(x) > 0.5 ? 2 : 1; px1(x, top - lump, 1, lump, '#ffffff'); }
+    }
+  });
+  if (r === 'snow' && Math.floor(sceneTime * 12) % 2) {   // shivering
+    const by = bird.y; ctx.fillStyle = 'rgba(200,230,255,0.9)';
+    ctx.fillRect(Math.round(bird.x - 34), Math.round(by + 2), 6, 2); ctx.fillRect(Math.round(bird.x - 32), Math.round(by - 6), 4, 2);
+    ctx.fillRect(Math.round(bird.x + 28), Math.round(by + 4), 6, 2); ctx.fillRect(Math.round(bird.x + 30), Math.round(by - 4), 4, 2);
+  }
+}
+
+// ======================================================= hooks
+{
+  const _sb = drawStopButton;
+  drawStopButton = function () { try { drawLogoSeason(); drawWeatherReaction(); drawSleep(); } catch (e) {} _sb(); };
+  const _dv = buildDevPage;
+  buildDevPage = function (page) {
+    _dv(page);
+    const box = el('div', 'pk-opts');
+    for (const [label, fn] of [['Sleepy bird', () => { SLEEP_FORCE = !SLEEP_FORCE; }], ['Bird: sun', () => { WX_FORCE = WX_FORCE === 'clear' ? '' : 'clear'; }],
+      ['Bird: rain', () => { WX_FORCE = WX_FORCE === 'rain' ? '' : 'rain'; }], ['Bird: snow', () => { WX_FORCE = WX_FORCE === 'snow' ? '' : 'snow'; }]]) {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
