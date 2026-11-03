@@ -1,0 +1,33 @@
+# Every time the game file changes, publish it as a GitHub release (one HTML file you can download).
+# The newest is always at: https://github.com/duckyisc00l/flappy-bird/releases/latest/download/flappy-bird.html
+name: Release the game file
+on:
+  push:
+    branches: [main]
+    paths: [app.html, version.json]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          BUILD=$(python3 -c "import json;print(json.load(open('version.json'))['build'])")
+          VER=$(python3 -c "import json;print(json.load(open('version.json'))['version'])")
+          NOTE=$(python3 -c "import json;print(json.load(open('version.json')).get('note',''))")
+          cp app.html flappy-bird.html
+          TAG="web-$BUILD"
+          gh release delete "$TAG" -y --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" flappy-bird.html --title "Flappy Bird $VER (build $BUILD)" --latest \
+            --notes "$NOTE
+
+          The whole game in one HTML file. Download it and open it in a browser (it works offline).
+          Newest version, always: https://github.com/duckyisc00l/flappy-bird/releases/latest/download/flappy-bird.html"
+          # keep the 5 newest
+          gh release list --limit 100 --json tagName -q '.[].tagName' | grep '^web-' | sort -t- -k2 -n -r | tail -n +6 | while read t; do gh release delete "$t" -y --cleanup-tag || true; done
