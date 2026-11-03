@@ -5277,7 +5277,7 @@ function render() {
   const skyW = 288 * 1.5, skyH = 512 * 1.5;
   const flipWorld = worldFlipped();
   if (flipWorld) { ctx.save(); ctx.translate(0, SH); ctx.scale(1, -1); }   // Upside Down mode: the whole world, not the score and menus
-  for (let i = 0; i < 2 + Math.floor(width / skyW); i++) spr(sky, skyX + i * (skyW - 1), skyH / 3.5 + 112 * 2, 1.5, 1.5, 0);
+  { const v = viewBox(); for (let i = Math.floor((v.L - skyX - skyW / 2) / (skyW - 1)); i <= Math.ceil((v.R - skyX + skyW / 2) / (skyW - 1)); i++) spr(sky, skyX + i * (skyW - 1), skyH / 3.5 + 112 * 2, 1.5, 1.5, 0); }   // v164: the whole screen
   drawCreepySky(skyX, skyW, skyH);
   drawCreepyFog();
   drawWeatherSky();
@@ -5298,7 +5298,7 @@ function render() {
 
   // land (z 0): 3 tiles, scale 2, spaced width-1
   const landW = 336 * 2;
-  for (let i = 0; i < 2 + Math.floor(width / landW); i++) spr(img.land, groundX + i * (landW - 1), 112, 2, 2, 0);
+  { const v = viewBox(); for (let i = Math.floor((v.L - groundX - 336) / (landW - 1)); i <= Math.ceil((v.R - groundX + 336) / (landW - 1)); i++) spr(img.land, groundX + i * (landW - 1), 112, 2, 2, 0); }   // v164: the whole screen, however wide (a strip was missing on iPad)
   drawSeasonGround();
   if (score <= -1) drawMassGraves();   // at -1 the ground is covered in dead birds
   drawArmyFill();                      // the swarm that killed you fills the whole screen
@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '5.9'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.0'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12526,7 +12526,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 163;
+const APP_BUILD = 164;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13506,7 +13506,7 @@ function drawMood() {
     page.appendChild(box);
   };
 }
-// ===================== v163: the bird sleeps at night, a seasonal logo, the bird reacts to the weather =====================
+// ===================== v163: the bird sleeps at night, a seasonal logo =====================
 
 // ---------- drawing in a sprite's own pixels (y down, like the picture), so extras sit exactly on it ----------
 function inSprite(x, y, s, rot, w, h, fn) {
@@ -13580,7 +13580,13 @@ function drawSleep() {
   }
   ctx.globalAlpha = 1;
 }
-{ const _dm = drawMood; drawMood = function () { if (sleepingNow()) return; _dm(); }; }   // (sleep wins over moods)
+{
+  const _dm = drawMood;
+  drawMood = function () {
+    if (sleepingNow()) return;   // (sleep wins over moods)
+    _dm();
+  };
+}
 
 // ======================================================= the logo dresses up for the season
 const LOGO_TOP = new Map();
@@ -13636,55 +13642,32 @@ function drawLogoSeason() {
   });
 }
 
-// ======================================================= the bird reacts to the weather
-// clear and sunny: sunglasses. Rain or a storm: a little umbrella. Snow: snow on its head, and it shivers.
-const UMBRELLA = ['......OOOO......', '....OOrrwwOO....', '..OOrrrwwwrrOO..', '.OrrrrwwwwrrrrO.', 'OOOOOOOOOOOOOOOO', '.......O........', '.......O........', '.......O........', '.......O........'];
-let WX_FORCE = '';   // (Developer page)
-function wxReaction() {
-  if (!birdExtrasOK() || gameMode === 'night' || sleepingNow()) return '';
-  const w = WX_FORCE || (weatherOn() ? WX.weather : '');
-  if (w === 'clear' && !skyIsNight) return 'sun';
-  if (w === 'rain' || w === 'storm') return 'rain';
-  if (w === 'snow') return 'snow';
-  return '';
-}
-function drawWeatherReaction() {
-  const r = wxReaction(); if (!r) return;
-  onBird((im, w, h, ox, oy) => {
-    if (r === 'sun') {   // sunglasses over the eye
-      const e = birdEye(im); if (!e) return;
-      for (const [x, y] of e.cells) px1(ox + x * 2, oy + y * 2, 2, 2, '#16141c');
-      px1(ox + e.left * 2 - 2, oy + e.top * 2 + 1, 2, 1, '#16141c');                          // the arm
-      px1(ox + (e.left + 1) * 2, oy + e.top * 2 + 1, 1, 1, '#ffffff'); px1(ox + (e.left + 1) * 2 + 1, oy + e.top * 2 + 2, 1, 1, '#9aa0b0');   // a glint
-    } else if (r === 'rain') {   // an umbrella held over its head
-      const cx = ox + 16, top = oy + 1 - UMBRELLA.length * 2;   // (in the bird's big pixels; the handle reaches its head)
-      UMBRELLA.forEach((row, j) => [...row].forEach((ch, i) => { if (ch === '.') return; px1(cx - 16 + i * 2, top + j * 2, 2, 2, ch === 'O' ? '#533846' : ch === 'r' ? '#e8281e' : '#ffffff'); }));
-    } else if (r === 'snow') {   // snow piled on its head
-      const P = pixData(im); if (!P) return;
-      for (let x = ox + 10; x < ox + 28 && x < w; x++) { let top = -1; for (let y = 0; y < h; y++) if (P.d[(y * P.w + x) * 4 + 3] > 40) { top = y; break; }
-        if (top < 0) continue; const lump = hash1(x) > 0.5 ? 2 : 1; px1(x, top - lump, 1, lump, '#ffffff'); }
-    }
-  });
-  if (r === 'snow' && Math.floor(sceneTime * 12) % 2) {   // shivering
-    const by = bird.y; ctx.fillStyle = 'rgba(200,230,255,0.9)';
-    ctx.fillRect(Math.round(bird.x - 34), Math.round(by + 2), 6, 2); ctx.fillRect(Math.round(bird.x - 32), Math.round(by - 6), 4, 2);
-    ctx.fillRect(Math.round(bird.x + 28), Math.round(by + 4), 6, 2); ctx.fillRect(Math.round(bird.x + 30), Math.round(by - 4), 4, 2);
-  }
-}
-
 // ======================================================= hooks
 {
   const _sb = drawStopButton;
-  drawStopButton = function () { try { drawLogoSeason(); drawWeatherReaction(); drawSleep(); } catch (e) {} _sb(); };
+  drawStopButton = function () { try { drawLogoSeason(); drawSleep(); } catch (e) {} _sb(); };
   const _dv = buildDevPage;
   buildDevPage = function (page) {
     _dv(page);
     const box = el('div', 'pk-opts');
-    for (const [label, fn] of [['Sleepy bird', () => { SLEEP_FORCE = !SLEEP_FORCE; }], ['Bird: sun', () => { WX_FORCE = WX_FORCE === 'clear' ? '' : 'clear'; }],
-      ['Bird: rain', () => { WX_FORCE = WX_FORCE === 'rain' ? '' : 'rain'; }], ['Bird: snow', () => { WX_FORCE = WX_FORCE === 'snow' ? '' : 'snow'; }]]) {
+    for (const [label, fn] of [['Sleepy bird', () => { SLEEP_FORCE = !SLEEP_FORCE; }]]) {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
+  };
+}
+
+// ======================================================= v164: you can't race your own link
+function myRunIds() { return lsList('fb_myRuns'); }
+{
+  const _ur = uploadRun;
+  uploadRun = async function () { const id = await _ur.apply(this, arguments); try { const a = myRunIds(); a.push(id); lsSetList('fb_myRuns', a.slice(-200)); } catch (e) {} return id; };
+  const _fr = fetchRun;
+  fetchRun = async function (id) {
+    const row = await _fr(id);
+    const mine = (accSignedIn() && row.user_id && ACCT.user && row.user_id === ACCT.user.id) || myRunIds().includes(row.id) || Object.values(linkCache).includes(row.id);
+    if (mine) throw new Error("That's your own run. Send the link to a friend so they can race you!");
+    return row;
   };
 }
 
