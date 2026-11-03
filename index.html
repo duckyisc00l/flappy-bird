@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '5.5'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '5.6'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -10518,12 +10518,12 @@ function seasonSky() {   // extra sky life, drawn after the sun/moon (the sky ti
   if (s === 'summer') for (const g of WX2.gulls) { const up = Math.floor(g.t * 4 + g.ph) % 2; spr(sart(up ? 'gull1' : 'gull2'), Math.round(g.x), Math.round(g.y + Math.sin(g.t + g.ph) * 6), 3, 3, 0); }
   if (s === 'valentine') for (const h of WX2.hearts) spr(sart('heartBal'), Math.round(h.x + Math.sin(h.t * 1.3 + h.ph) * 10), Math.round(h.y), 3, 3, Math.sin(h.t * 1.3 + h.ph) * 0.1);
   if (s === 'newyear' && WX2.plane) {   // a little plane pulling a banner
-    const p = WX2.plane, yr = new Date().getMonth() === 11 ? new Date().getFullYear() + 1 : new Date().getFullYear();
+    const p = WX2.plane, yr = new Date().getMonth() >= 6 ? new Date().getFullYear() + 1 : new Date().getFullYear();   // (from July on it's the coming year)
     const text = 'HAPPY NEW YEAR ' + yr, tw = panelTextWidth(text) + 24, bx = p.x + 40, by = p.y + Math.sin(p.t * 2) * 4;
     ctx.fillStyle = '#cfc8d8'; ctx.fillRect(p.x + 18, by + 2, 24, 2);
     ctx.fillStyle = '#fff6e0'; ctx.fillRect(bx, by - 10, tw, 24);
     ctx.fillStyle = '#e8281e'; ctx.fillRect(bx, by - 12, tw, 3); ctx.fillRect(bx, by + 13, tw, 3);
-    drawPanelText(text, Math.round(bx + 12), Math.round(by - 6));
+    drawPanelText(text, Math.round(bx + 12), Math.round(by + 7));   // v159: inside the banner (it hung below it)
     spr(sart('plane'), Math.round(p.x), Math.round(p.y + Math.sin(p.t * 2) * 4), -3, 3, 0);
   }
 }
@@ -12525,7 +12525,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 158;
+const APP_BUILD = 159;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13395,6 +13395,16 @@ function buildAchPage(page) {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
+  };
+}
+
+// v159: the title font draws a small "f" like an "s" ("Prosile"): titles use a capital F
+{
+  const _sp = showPage;
+  showPage = function (kind, first) {
+    const r = _sp(kind, first);
+    try { for (const t of PK.panel.querySelectorAll('.pk-title')) if (/f/.test(t.textContent)) t.textContent = t.textContent.replace(/f/g, 'F'); } catch (e) {}
+    return r;
   };
 }
 
