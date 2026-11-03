@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.2'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.3'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12522,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 166;
+const APP_BUILD = 167;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -12912,7 +12912,7 @@ function applyQuality() {
   };
   requestAnimationFrame(watch);
 }
-// ===================== v158: the bird remembers, the fake crash, Night Shift, achievements =====================
+// ===================== v158: the bird remembers, the fake crash, achievements =====================
 
 // ---------- small helpers ----------
 function lsNum(k) { try { return parseInt(localStorage.getItem(k) || '0', 10) || 0; } catch (e) { return 0; } }
@@ -12965,8 +12965,6 @@ const ACH = [
   { id: 'daily', name: 'Daily Flyer', desc: 'Finish a Daily Challenge.' },
   { id: 'streak7', name: 'Week Streak', desc: 'Keep a 7 day Daily streak.' },
   { id: 'storm10', name: 'Storm Chaser', desc: 'Score 10 in a thunderstorm.' },
-  { id: 'night', name: 'Night Shift', desc: 'Play a round of Night Shift (12 to 3 AM).' },
-  { id: 'night20', name: 'Graveyard Shift', desc: 'Score 20 in Night Shift.' },
   { id: 'glitch', name: 'Inside The Glitch', desc: 'Find what hides behind the crash.', secret: true },
   { id: 'patched', name: 'Patched', desc: 'Make it out of the glitch.', secret: true },
   { id: 'theend', name: 'The End', desc: 'Reach the ending.', secret: true },
@@ -12993,7 +12991,6 @@ function achScoreCheck() {
   if (m === 'tiny' && s >= 10) achUnlock('tiny10');
   if (m === 'turbo' && s >= 30) achUnlock('turbo30');
   if (m === 'dark' && s >= 10) achUnlock('dark10');
-  if (m === 'night' && s >= 20) achUnlock('night20');
   if (WX.weather === 'storm' && weatherOn() && s >= 10) achUnlock('storm10');
   const p = lsNum('fb_lifePipes') + 1; lsSetNum('fb_lifePipes', p);
   if (p >= 500) achUnlock('p500');
@@ -13010,9 +13007,8 @@ function achDeath() {   // every crash of yours (the bot's and the afterlife's d
   if (score <= 0 && !haunted) achUnlock('faceplant');
   const played = lsList('fb_modesPlayed');
   if (!played.includes(gameMode)) { played.push(gameMode); lsSetList('fb_modesPlayed', played); }
-  if (MODES.filter(x => x.id !== 'night').every(x => played.includes(x.id))) achUnlock('tourist');
+  if (MODES.every(x => played.includes(x.id))) achUnlock('tourist');
   if (gameMode === 'daily') achUnlock('daily');
-  if (gameMode === 'night') achUnlock('night');
   setTimeout(() => { if (lsNum('fb_dailyStreak') >= 7) achUnlock('streak7'); }, 0);   // (after the Daily has counted today)
 }
 {
@@ -13140,7 +13136,6 @@ function glitchScore() {
     if (GL.phase === 'exit') { GL.t += dt; if (GL.t >= 1.2) { GL.phase = ''; if (!isShowingGameOver && !runUsedBot) achUnlock('patched'); } }
     else if (GL.phase === 'inside') GL.t += dt;
     if (GL.phase && !bird.dynamic && !isGameOver && !isShowingGameOver) GL.phase = '';   // (back on the title)
-    nightTick(dt);
   };
   const _wo = weatherOn;
   weatherOn = function () { return !glitchVisible() && _wo(); };
@@ -13149,7 +13144,6 @@ function glitchScore() {
     _ap();
     let set = null;
     if (glitchVisible()) set = 'glitch';
-    else if (nightOn() && _wo()) set = 'night';
     if (!set) return;
     const P = pipeImgs(set);
     if (P && P.up.complete && P.down.complete && P.up.naturalWidth > 0) { img.pipe_up = P.up; img.pipe_down = P.down; }
@@ -13219,87 +13213,6 @@ function drawGlitchOverlay() {
   }
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
   for (let y = 0; y < SH; y += 6) ctx.fillRect(L, y, W, 2);   // scanlines
-}
-
-// ======================================================= Night Shift (12 to 3 AM, your time)
-MODES.push({ id: 'night', name: 'NIGHT SHIFT', title: 'Night Shift', desc: 'Only open from 12 to 3 AM. Darker and faster, with things watching, and its own leaderboard.' });
-LB_MODES.push('night');
-let NIGHT_FORCE = false;   // (Developer page: open it now)
-function nightOpen() { return NIGHT_FORCE || new Date().getHours() < 3; }
-function nightOn() { return modeOn('night') && afterlife === 0 && !haunted; }
-const NS = { eyes: [], nextEye: 1, flick: 0, nextFlick: 7, check: 0, told: '' };
-function nightTick(dt) {
-  NS.check -= dt;
-  if (NS.check <= 0) {
-    NS.check = 1;
-    const title = !bird.dynamic && !isGameOver && !isShowingGameOver && !isWaitingToStart;
-    if (gameMode === 'night' && !nightOpen() && !inRun()) { setGameMode('normal'); achBanner('NIGHT SHIFT', 'IS OVER'); }
-    const night = new Date(Date.now() - 3 * 3600000).toDateString();   // (one "night" runs 12 AM to 3 AM)
-    if (nightOpen() && title && NS.told !== night && lsList('fb_nightTold')[0] !== night) { NS.told = night; lsSetList('fb_nightTold', [night]); if (gameMode !== 'night') achBanner('NIGHT SHIFT IS OPEN', 'PICK IT IN MODES'); }
-  }
-  if (!nightOn()) { NS.eyes = []; return; }
-  const v = viewBox(), scroll = moving.speed > 0 ? 200 * speedMul() : 0;
-  NS.nextEye -= dt;
-  if (NS.nextEye <= 0 && NS.eyes.length < 4) { NS.nextEye = 1.2 + Math.random() * 2; NS.eyes.push({ x: v.L + 30 + Math.random() * (v.R - v.L - 60), y: 250 + Math.random() * 120, t: 0, life: 2.5 + Math.random() * 2 }); }
-  for (const e of NS.eyes) { e.t += dt; e.x -= scroll * 0.25 * dt; }
-  NS.eyes = NS.eyes.filter(e => e.t < e.life && e.x > v.L - 20);
-  NS.nextFlick -= dt;
-  if (NS.nextFlick <= 0) { NS.nextFlick = 6 + Math.random() * 6; NS.flick = 0.45; }
-  if (NS.flick > 0) NS.flick -= dt;
-}
-{
-  const _sm = speedMul;
-  speedMul = function () { return modeOn('night') ? 1.1 : _sm(); };
-  const _us = updateSky;
-  updateSky = function () { _us(); if (gameMode === 'night' && afterlife === 0 && !haunted) { skyIsNight = true; WX.tod = 'night'; } };
-  const _dd = drawDarkness;
-  drawDarkness = function (flip) {
-    _dd(flip);
-    if (!nightOn() || glitchVisible()) return;
-    const v = viewBox(), bx = bird.x, by = flip ? SH - bird.y : bird.y;
-    const out = NS.flick > 0 && Math.floor(NS.flick * 16) % 3 !== 0 ? 0.97 : 0.8;   // the lights go out now and then
-    const r = 175 + 5 * Math.sin(WX.t * 7);
-    const g = ctx.createRadialGradient(bx, by, 0, bx, by, r);
-    g.addColorStop(0, 'rgba(8,2,10,0)'); g.addColorStop(0.5, 'rgba(8,2,10,0.22)'); g.addColorStop(1, 'rgba(8,2,10,' + out + ')');
-    ctx.fillStyle = g; ctx.fillRect(v.L - 10, -10, v.R - v.L + 20, SH + 20);
-    ctx.fillStyle = 'rgba(70,0,14,0.14)'; ctx.fillRect(v.L - 10, -10, v.R - v.L + 20, SH + 20);
-    for (const e of NS.eyes) {   // eyes in the dark (they blink)
-      const a = Math.min(1, e.t / 0.4, (e.life - e.t) / 0.4), blink = (e.t % 1.7) > 1.5;
-      if (blink) continue;
-      ctx.globalAlpha = a * 0.25; ctx.fillStyle = '#ff2020'; ctx.fillRect(Math.round(e.x) - 4, Math.round(e.y) - 3, 19, 9);
-      ctx.globalAlpha = a; ctx.fillStyle = '#ff3030'; ctx.fillRect(Math.round(e.x), Math.round(e.y), 3, 3); ctx.fillRect(Math.round(e.x) + 8, Math.round(e.y), 3, 3);
-      ctx.globalAlpha = 1;
-    }
-  };
-  const _mt = drawModeTag;
-  drawModeTag = function () {
-    if (gameMode !== 'night') return _mt();
-    if (!getReady.added || getReady.scale <= 0 || (ending && ending.on) || afterlife) return;
-    const t = 'NIGHT SHIFT';
-    drawPanelText(t, Math.round(getReady.x - panelTextWidth(t) / 2), getReady.y - 44);
-  };
-  const _mi = drawModeIcon;
-  drawModeIcon = function (cv, id) {
-    if (id !== 'night') return _mi(cv, id);
-    _mi(cv, 'dark');
-    const g = cv.getContext('2d');
-    g.fillStyle = 'rgba(70,0,14,0.35)'; g.fillRect(0, 0, 84, 84);
-    g.fillStyle = '#f0e6c8';   // a crescent moon
-    for (const [x, y, w] of [[63, 6, 4], [61, 8, 3], [60, 10, 3], [60, 12, 3], [60, 14, 3], [61, 16, 3], [63, 18, 4]]) g.fillRect(x, y, w, 2);
-    g.fillStyle = '#ff3030'; g.fillRect(20, 52, 3, 3); g.fillRect(28, 52, 3, 3); g.fillRect(58, 40, 2, 2); g.fillRect(64, 40, 2, 2);
-  };
-  const _mp = buildModePicker;
-  buildModePicker = function (panel) {
-    _mp(panel);
-    if (nightOpen()) return;
-    const btns = panel.querySelectorAll('.pk-mode'), i = MODES.findIndex(m => m.id === 'night'), b = btns[i];
-    if (!b) return;
-    const nb = b.cloneNode(true); nb.classList.add('pk-locked'); nb.classList.remove('sel');
-    const best = nb.querySelector('.pk-best'); if (best) best.textContent = 'Opens at 12 AM (your time)';
-    nb.addEventListener('click', () => { playSound('swoosh'); });
-    const cv0 = b.querySelector('canvas'), cv1 = nb.querySelector('canvas'); if (cv0 && cv1) cv1.getContext('2d').drawImage(cv0, 0, 0);
-    b.replaceWith(nb);
-  };
 }
 
 // ======================================================= drawing hooks
@@ -13388,8 +13301,7 @@ function buildAchPage(page) {
     _dv(page);
     page.appendChild(el('div', 'pk-sec', 'Secrets'));
     const box = el('div', 'pk-opts');
-    for (const [label, fn] of [['Glitch now', () => { closePicker(); setTimeout(() => { if (bird.dynamic && !isGameOver) glitchCrash(); else GL.force = true; }, 300); }],
-      ['Night Shift open', () => { NIGHT_FORCE = !NIGHT_FORCE; }], ['+10 crashes', () => { lsSetNum('fb_lifeDeaths', lsNum('fb_lifeDeaths') + 10); SCAR.at = 0; if (rebornUnlocked()) rebornRegister(); }]]) {
+    for (const [label, fn] of [['Glitch now', () => { closePicker(); setTimeout(() => { if (bird.dynamic && !isGameOver) glitchCrash(); else GL.force = true; }, 300); }],  ['+10 crashes', () => { lsSetNum('fb_lifeDeaths', lsNum('fb_lifeDeaths') + 10); SCAR.at = 0; if (rebornUnlocked()) rebornRegister(); }]]) {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
