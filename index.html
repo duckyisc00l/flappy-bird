@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.8'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.9'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12526,7 +12526,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 172;
+const APP_BUILD = 173;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13649,6 +13649,16 @@ setTimeout(purgeOwnRaces, 1500); setInterval(purgeOwnRaces, 5000);
     const r = _tb(px, py);
     if (ready && !hitButton && isGameOver && playButton.added) handlePlayTap();
     return r;
+  };
+}
+
+// ===================== v173: a crash has a little punch: the screen gives a small shake =====================
+{
+  const _go = gameOver;
+  gameOver = function () {
+    const first = !isShowingGameOver;
+    _go();
+    if (first && afterlife === 0 && !(ending && ending.on) && !haunted && shakeT >= 1.2) shakeT = 0.8;   // (a few pixels, dying away in half a second)
   };
 }
 
