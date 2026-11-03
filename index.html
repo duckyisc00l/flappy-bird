@@ -6151,7 +6151,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.7'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.8'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12526,7 +12526,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 171;
+const APP_BUILD = 172;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13620,6 +13620,35 @@ function glyphOutlined(text, x, top, col, k) {   // pixel letters with a dark ed
       glyphOutlined(txt, Math.round(width / 2 - glyphWidth(txt, k) / 2), Math.round(scoreLabel.y - 46 + Math.min(t, 0.2) * 20), '#ffd23c', k);
       ctx.globalAlpha = 1;
     } catch (e) {}
+  };
+}
+
+// ===================== v172: your own runs never stay in your race list =====================
+// (a race of your own run saved before v164 kept coming back every time the game opened, and the list
+// syncs with your account, so it's checked again every few seconds and before every round)
+function ownFriend(f) {
+  const me = accSignedIn() && ACCT.user ? ACCT.user.id : null;
+  return !!((me && f.uid && f.uid === me) || (f.gid && (myRunIds().includes(f.gid) || Object.values(linkCache).includes(f.gid))));
+}
+function purgeOwnRaces() {
+  try {
+    const gone = friendList.filter(ownFriend).map(f => f.id); if (!gone.length) return;
+    friendList = friendList.filter(f => !gone.includes(f.id)); saveFriends();
+    if (raceId && gone.includes(raceId)) { setRace(''); raceInfo = null; }
+  } catch (e) {}
+}
+setTimeout(purgeOwnRaces, 1500); setInterval(purgeOwnRaces, 5000);
+{ const _sg = startGame; startGame = function () { purgeOwnRaces(); return _sg.apply(this, arguments); }; }
+
+// ===================== v172: tap anywhere to play again =====================
+// once the score board has finished counting up, a tap anywhere that isn't a button starts the next round
+{
+  const _tb = touchesBegan;
+  touchesBegan = function (px, py) {
+    const ready = isGameOver && playButton.added && playButton.scale >= 0.99 && resultNode.added && result && sceneTime - result.shownAt > 1.4 && !hitButton && !PK && afterlife === 0;
+    const r = _tb(px, py);
+    if (ready && !hitButton && isGameOver && playButton.added) handlePlayTap();
+    return r;
   };
 }
 
