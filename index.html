@@ -12525,7 +12525,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 156;
+const APP_BUILD = 157;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -12878,6 +12878,42 @@ function realTod() {
     if (WX.season === 'halloween') return;   // (rollWeather keeps Halloween at night)
     WX.tod = realTod(); skyIsNight = WX.tod === 'night';
   };
+}
+// ===================== v157: smooth first =====================
+// The game's code costs well under a millisecond a frame; what can slow a phone down is filling pixels
+// (a 3x screen is ~3 million of them, and fog, glows and tints are drawn over most of it).
+// So: start at the screen's full sharpness, and if the game can't hold ~48 fps while you play,
+// draw the canvas at a lower resolution (3x -> 2x -> 1.5x). It never goes back down mid-session on its own,
+// and the choice is remembered for a week.
+const QUALITY = { cap: (() => { try { const o = JSON.parse(localStorage.getItem('fb_dprCap') || 'null'); return o && Date.now() - o.t < 7 * 86400000 ? o.cap : Infinity; } catch (e) { return Infinity; } })(),
+  win: [], last: 0, quietUntil: 0 };
+function applyQuality() {
+  const real = Math.max(1, window.devicePixelRatio || 1), want = Math.min(real, QUALITY.cap);
+  if (Math.abs(want - DPR) < 0.01) return;
+  DPR = want;
+  canvas.width = Math.round(boxW * DPR); canvas.height = Math.round(boxH * DPR);
+  QUALITY.quietUntil = performance.now() + 1500;   // (give it a moment before judging again)
+}
+{
+  const _layout = layout;
+  layout = function () { _layout(); applyQuality(); };
+  applyQuality();
+  const watch = (t) => {
+    requestAnimationFrame(watch);
+    const dt = QUALITY.last ? t - QUALITY.last : 0; QUALITY.last = t;
+    let playing = false; try { playing = bird.dynamic && !isGameOver && !document.hidden; } catch (e) {}
+    if (!playing || t < QUALITY.quietUntil || dt <= 0 || dt > 250) { if (!playing) QUALITY.win = []; return; }
+    QUALITY.win.push(dt);
+    if (QUALITY.win.length < 120) return;                  // ~2 s of frames
+    const avg = QUALITY.win.reduce((a, b) => a + b, 0) / QUALITY.win.length;
+    QUALITY.win = [];
+    if (avg <= 1000 / 48) return;                          // smooth enough
+    const next = DPR > 2.01 ? 2 : DPR > 1.51 ? 1.5 : null;
+    if (!next) return;
+    QUALITY.cap = next; try { localStorage.setItem('fb_dprCap', JSON.stringify({ cap: next, t: Date.now() })); } catch (e) {}
+    applyQuality();
+  };
+  requestAnimationFrame(watch);
 }
 
 updateSettingsUI();
