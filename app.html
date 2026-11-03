@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '6.1'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '6.2'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12522,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 165;
+const APP_BUILD = 166;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13434,28 +13434,27 @@ function moodSet() {
   try { localStorage.setItem('fb_mood', JSON.stringify({ m, t: Date.now() })); } catch (e) {}
   lsSetNum('fb_lastPlay', Date.now());
 }
-const MOOD_ART = {
-  cloud: [['...ggg...', '.gggggggg', 'ggggggggg', '.ggggggg.', '....y....', '...y.....', '....y....'], { g: '#5a5a6a', y: '#ffd23c' }],
-};
-let MOOD_IM = {};
+// the mood shows on the bird's own face (its eye), whatever bird it is
 function drawMood() {
-  if (afterlife || haunted || (ending && ending.on) || bird.dynamic || !bird.added) return;
+  if (afterlife || haunted || (ending && ending.on) || bird.dynamic || !bird.added || worldFlipped() || glitchVisible()) return;
   const m = mood(); if (!m) return;
-  const t = sceneTime, by = worldFlipped() ? SH - bird.y : bird.y, x = bird.x, y = by + 30;
-  if (m === 'happy') {
-    const h = pix('heart'); if (h) spr(h, Math.round(x + 6), Math.round(y + 4 + Math.sin(t * 3) * 3), 2, 2, 0);
-    if (Math.floor(t * 3) % 2) { ctx.fillStyle = '#fff6a0'; ctx.fillRect(Math.round(x - 16), Math.round(y + 8), 2, 2); ctx.fillRect(Math.round(x + 22), Math.round(y + 14), 2, 2); }
-  } else if (m === 'grumpy') {
-    if (!MOOD_IM.cloud) MOOD_IM.cloud = pixCanvas(MOOD_ART.cloud[0], MOOD_ART.cloud[1]);
-    spr(MOOD_IM.cloud, Math.round(x + 2 + Math.sin(t * 2) * 2), Math.round(y + 10), 3, 3, 0);
-  } else if (m === 'sleepy') {
-    for (let i = 0; i < 3; i++) {
-      const f = ((t * 0.5 + i / 3) % 1), k = [1, 2, 2][i];
-      ctx.globalAlpha = Math.min(1, (1 - f) * 2);
-      glyphText('Z', Math.round(x + 14 + f * 16 + i * 3), Math.round(y + f * 30 + 6), '#ffffff', k + f);
+  onBird((im) => {
+    const e = birdEye(im); if (!e) return;
+    const X = (x) => e.ox + x * 2, Y = (y) => e.oy + y * 2, mid = Math.round((e.top + e.bot) / 2);
+    if (m === 'happy') {          // eyes closed in a smile ^ and a little blush
+      for (const [x, y] of e.cells) px1(X(x), Y(y), 2, 2, e.L);
+      const c = Math.round((e.left + e.right) / 2);   // a smiling eye: ^
+      for (const [dx, dy] of [[-2, 1], [-1, 0], [0, -1], [1, -1], [2, 0], [3, 1]]) px1(X(c + dx - 1), Y(mid + dy), 2, 2, e.O);
+      px1(X(e.left - 1), Y(e.bot + 1), 2, 2, '#ff8aa8'); px1(X(e.left), Y(e.bot + 1), 2, 2, '#ff8aa8');
+    } else if (m === 'grumpy') {  // a heavy brow comes down over the eye, lower on the beak side
+      const brow = (x) => e.top + Math.floor((x - e.left) * 0.6);
+      for (const [x, y] of e.cells) if (y <= brow(x)) px1(X(x), Y(y), 2, 2, e.L);
+      for (let x = e.left - 1; x <= e.right; x++) px1(X(x), Y(brow(Math.max(x, e.left))) + 1, 2, 2, e.O);
+    } else if (m === 'sleepy') {  // droopy half-closed eyelids
+      for (const [x, y] of e.cells) if (y <= mid) px1(X(x), Y(y), 2, 2, e.L);
+      px1(X(e.left), Y(mid) + 1, (e.right - e.left + 1) * 2, 1, e.O);
     }
-    ctx.globalAlpha = 1;
-  }
+  });
 }
 
 // ======================================================= hooks
@@ -13506,10 +13505,10 @@ function drawMood() {
 
 // ---------- drawing in a sprite's own pixels (y down, like the picture), so extras sit exactly on it ----------
 function inSprite(x, y, s, rot, w, h, fn) {
-  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, -s); ctx.translate(-w / 2, -h / 2);
+  ctx.save(); ctx.globalAlpha = 1; ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.scale(s, -s); ctx.translate(-w / 2, -h / 2);
   fn(); ctx.restore();
 }
-function px1(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w, h); }
+function px1(x, y, w, h, col) { ctx.fillStyle = col; ctx.fillRect(x, y, w + 0.12, h + 0.12); }   // (a hair bigger: no seams between pixels)
 // what a picture looks like inside: its pixels (cached)
 const PXDATA = new Map();
 function pixData(im) {
@@ -13532,7 +13531,10 @@ function birdEye(im) {
     const { w, h, d } = P, ox = Math.round((w - 34) / 2), oy = Math.round((h - 24) / 2);
     const px = (x, y) => { const X = ox + x * 2, Y = oy + y * 2; if (X < 0 || Y < 0 || X >= w || Y >= h) return null; const i = (Y * w + X) * 4; return d[i + 3] > 10 ? [d[i], d[i + 1], d[i + 2]] : null; };
     const hex = (c) => '#' + c.map(v => v.toString(16).padStart(2, '0')).join('');
-    const white = px(11, 2), pupil = px(12, 3), lid = px(8, 2) || px(7, 2), line = px(7, 0);
+    const white = px(11, 2), pupil = px(12, 3), line = px(7, 0);
+    // the eyelid is the bird's body colour (the first of these that isn't the dark outline)
+    const dark = (c) => !c || (line && Math.abs(c[0] - line[0]) + Math.abs(c[1] - line[1]) + Math.abs(c[2] - line[2]) < 40) || c[0] + c[1] + c[2] < 120;
+    const lid = [px(7, 2), px(6, 2), px(6, 3), px(7, 3), px(5, 3)].find(c => !dark(c)) || null;
     if (white && pupil && lid) {
       const near = (a, b) => a && Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) < 40;
       const cells = [];
