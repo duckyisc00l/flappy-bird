@@ -6147,7 +6147,7 @@ function botDecide(now, lag) {
   }
   if (flap) { botLastFlap = now; runUsedBot = true; flapBird(); }
 }
-const APP_VERSION = '7.1'; // MARKETING_VERSION in project.pbxproj
+const APP_VERSION = '7.2'; // MARKETING_VERSION in project.pbxproj
 
 // ---------- Loop / input wiring ----------
 // LoadingViewController (Main.storyboard initial VC): black view, DotGears 240x128 aspect-fit at centre,
@@ -12522,7 +12522,7 @@ setTimeout(() => { watchUploadBests().catch(() => {}); }, 6000);
 // 30 minutes, and when you come back to it). A newer build shows a banner with an Update button:
 // - website / Home Screen app: fetch the new page past every cache, then reload
 // - iPhone app: the app downloads the new game from the website, checks it, and switches to it (your saves stay)
-const APP_BUILD = 175;
+const APP_BUILD = 176;
 const UPD = { remote: null, shown: false, busy: false, later: 0 };
 function inNativeApp() { try { return !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.update); } catch (e) { return false; } }
 async function checkUpdate() {
@@ -13270,7 +13270,7 @@ function buildAchPage(page) {
     return r;
   };
 }
-// ===================== v161: bird moods, old version day =====================
+// ===================== v161: old version day =====================
 
 ACH.push(
   { id: 'oldday', name: 'Happy Birthday', desc: 'Play on Flappy Birds birthday (May 24).', secret: true });
@@ -13285,61 +13285,12 @@ function oldDay() { const d = new Date(); return OLD_FORCE || (d.getMonth() === 
   drawTrail = function (layer) { if (oldDay()) return; _dt(layer); };
 }
 
-// ======================================================= bird moods
-// happy after a new best, grumpy after crashing before the first pipe, sleepy if you haven't played for a day
-function mood() {
-  const last = lsNum('fb_lastPlay');
-  if (last && Date.now() - last > 24 * 3600000) return 'sleepy';
-  try { const o = JSON.parse(localStorage.getItem('fb_mood') || 'null'); if (o && o.m) return o.m; } catch (e) {}
-  return '';
-}
-function moodSet() {
-  if (!realRun() || haunted) return;
-  const m = score > bestScore() && score >= 5 ? 'happy' : score <= 0 ? 'grumpy' : '';
-  try { localStorage.setItem('fb_mood', JSON.stringify({ m, t: Date.now() })); } catch (e) {}
-  lsSetNum('fb_lastPlay', Date.now());
-}
-// the mood shows on the bird's own face (its eye), whatever bird it is
-function drawMood() {
-  if (afterlife || haunted || (ending && ending.on) || bird.dynamic || !bird.added || worldFlipped() || glitchVisible()) return;
-  const m = mood(); if (!m) return;
-  onBird((im) => {
-    const e = birdEye(im); if (!e) return;
-    const X = (x) => e.ox + x * 2, Y = (y) => e.oy + y * 2, mid = Math.round((e.top + e.bot) / 2);
-    if (m === 'happy') {          // eyes closed in a smile ^ and a little blush
-      for (const [x, y] of e.cells) px1(X(x), Y(y), 2, 2, e.L);
-      const c = Math.round((e.left + e.right) / 2);   // a smiling eye: ^
-      for (const [dx, dy] of [[-2, 1], [-1, 0], [0, -1], [1, -1], [2, 0], [3, 1]]) px1(X(c + dx - 1), Y(mid + dy), 2, 2, e.O);
-      px1(X(e.left - 1), Y(e.bot + 1), 2, 2, '#ff8aa8'); px1(X(e.left), Y(e.bot + 1), 2, 2, '#ff8aa8');
-    } else if (m === 'grumpy') {  // a heavy brow comes down over the eye, lower on the beak side
-      const brow = (x) => e.top + Math.floor((x - e.left) * 0.6);
-      for (const [x, y] of e.cells) if (y <= brow(x)) px1(X(x), Y(y), 2, 2, e.L);
-      for (let x = e.left - 1; x <= e.right; x++) px1(X(x), Y(brow(Math.max(x, e.left))) + 1, 2, 2, e.O);
-    } else if (m === 'sleepy') {  // droopy half-closed eyelids
-      for (const [x, y] of e.cells) if (y <= mid) px1(X(x), Y(y), 2, 2, e.L);
-      px1(X(e.left), Y(mid) + 1, (e.right - e.left + 1) * 2, 1, e.O);
-    }
-  });
-}
-
 // ======================================================= hooks
 {
   const _up = update;
   update = function (dt) {
     _up(dt);
     if (GL.phase === 'crash') return;
-  };
-  const _go = gameOver;
-  gameOver = function () {
-    if (!isShowingGameOver) { try { moodSet(); } catch (e) {} }
-    _go();
-  };
-  let lastT = 0;
-  const _sb = drawStopButton;
-  drawStopButton = function () {
-    const now = performance.now() / 1000, dt = lastT ? Math.min(0.1, now - lastT) : 0; lastT = now;
-    try { drawMood(); } catch (e) {}
-    _sb();
   };
   // old version day: say so once on the title, and count the achievement
   let told = '';
@@ -13359,8 +13310,7 @@ function drawMood() {
   buildDevPage = function (page) {
     _dv(page);
     const box = el('div', 'pk-opts');
-    for (const [label, fn] of [['Old version day', () => { OLD_FORCE = !OLD_FORCE; rollWeather(); }], ['Mood: happy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'happy', t: Date.now() })); }],
-      ['Mood: grumpy', () => { localStorage.setItem('fb_mood', JSON.stringify({ m: 'grumpy', t: Date.now() })); }], ['Mood: sleepy', () => { lsSetNum('fb_lastPlay', Date.now() - 2 * 86400000); }]]) {
+    for (const [label, fn] of [['Old version day', () => { OLD_FORCE = !OLD_FORCE; rollWeather(); }]]) {
       const b = el('button', 'pk-opt', label); b.addEventListener('click', () => { haptic(); playSound('swoosh'); fn(); }); box.appendChild(b);
     }
     page.appendChild(box);
@@ -13467,13 +13417,6 @@ function drawSleep() {
     glyphText('Z', Math.round(x + 14 + f * 16 + i * 3), Math.round(y + f * 30 + 6), '#ffffff', k + f);
   }
   ctx.globalAlpha = 1;
-}
-{
-  const _dm = drawMood;
-  drawMood = function () {
-    if (sleepingNow()) return;   // (sleep wins over moods)
-    _dm();
-  };
 }
 
 // ======================================================= the logo dresses up for the season
